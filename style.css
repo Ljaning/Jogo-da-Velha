@@ -1,0 +1,54 @@
+@charset "UTF-8";
+
+:root {
+
+    /* CSS Body */
+    --body-font-family: 'Open Sans', sans-serif;
+    --body-background-one: #0F2027;  /* fallback for old browsers */
+    --body-background-second: -webkit-linear-gradient(to right, #2C5364, #203A43, #0F2027);  /* Chrome 10-25, Safari 5.1-6 */
+    --body-background-third: linear-gradient(to right, #2C5364, #203A43, #0F2027); /* W3C, IE 10+/ Edge, Firefox 16+, Chrome 26+, Opera 12+, Safari 7+ */
+    --body-display: flex;
+    --body-flex-direction: column;
+    --body-align-items: center;
+
+    /* CSS H1 */
+    --h1-color: white;
+    --h1-text-transform: uppercase;
+
+    /* CSS Square */
+    --square-width: 200px;
+    --square-height: 200px;
+    --square-background-color: #6dd5ed;
+    --square-display: inline-block;
+
+    /* CSS Stage */
+
+
+}
+
+body {
+    font-family: var(--body-font-family);
+    background: var(--body-background-one);
+    background: var(--body-background-second);
+    background: var(--body-background-third);
+    display: var(--body-display);
+    flex-direction: var(--body-flex-direction);
+    align-items: var(--body-align-items);
+    
+}
+
+h1 {
+    color: var(--h1-color);
+    text-transform: var(--h1-text-transform);
+}
+
+.square {
+    width: var(--square-width);
+    height: var(--square-height);
+    background-color: var(--square-background-color);
+    display: var(--square-display);
+}
+
+
+
+
