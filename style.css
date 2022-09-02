@@ -21,8 +21,37 @@
     --square-background-color: #6dd5ed;
     --square-display: inline-block;
 
-    /* CSS Stage */
+    /* CSS o */
+    --o-position: relative;
 
+    /* CSS o::after */
+    --o-after-content: "O";
+    --o-after-font-size: 150px;
+    --o-after-color: #203A43;
+    --o-after-line-height: 200px;
+    --o-after-position: absolute;
+    --o-after-top: 0;
+    --o-after-right: 0;
+    --o-after-bottom: 0;
+    --o-after-left: 0;
+    --o-after-display: flex;
+    --o-after-justify-content: center;
+
+    /* CSS x */
+    --x-position: relative;
+
+    /* CSS x::after */
+    --x-after-content: "X";
+    --x-after-font-size: 150px;
+    --x-after-color: #203A43;
+    --x-after-line-height: 200px;
+    --x-after-position: absolute;
+    --x-after-top: 0;
+    --x-after-right: 0;
+    --x-after-bottom: 0;
+    --x-after-left: 0;
+    --x-after-display: flex;
+    --x-after-justify-content: center;
 
 }
 
@@ -47,6 +76,42 @@ h1 {
     height: var(--square-height);
     background-color: var(--square-background-color);
     display: var(--square-display);
+}
+
+.o {
+    position: var(--o-position);
+}
+
+.o::after {
+    display: var(--o-after-display);
+    justify-content: var(--o-after-justify-content);
+    content: var(--o-after-content);
+    color: var(--o-after-color);
+    font-size: var(--o-after-font-size);
+    position: var(--o-after-position);
+    line-height: var(--o-after-line-height);
+    top: var(--o-after-top);
+    right: var(--o-after-right);
+    bottom: var(--o-after-bottom);
+    left: var(--o-after-left);
+}
+
+.x {
+    position: var(--x-position);
+}
+
+.x::after {
+    display: var(--x-after-display);
+    justify-content: var(--x-after-justify-content);
+    content: var(--x-after-content);
+    color: var(--x-after-color);
+    font-size: var(--x-after-font-size);
+    position: var(--x-after-position);
+    line-height: var(--x-after-line-height);
+    top: var(--x-after-top);
+    right: var(--x-after-right);
+    bottom: var(--x-after-bottom);
+    left: var(--x-after-left);
 }
 
 
