@@ -1,3 +1,5 @@
+let restartButton = document.getElementById("restart");
+
 document.addEventListener("DOMContentLoaded", () => {
     let squares = document.querySelectorAll(".square");
     squares.forEach((square) => {
@@ -21,3 +23,9 @@ function updateSquare(position) {
     let symbol = board[position];
     square.innerHTML = `<div class="${symbol}"></div>`
 }
+
+restartButton.addEventListener("click", () => {
+    board = ['', '', '', '', '', '', '', '', ''];
+    playerTime = 0;
+    gameOver = false;
+});
