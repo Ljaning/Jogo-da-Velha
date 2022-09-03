@@ -24,6 +24,7 @@ function updateSquare(position) {
     square.innerHTML = `<div class="${symbol}"></div>`
 }
 
+// Botão para reiniciar o jogo.
 restartButton.addEventListener("click", () => {
     board = ['', '', '', '', '', '', '', '', ''];
     playerTime = 0;
