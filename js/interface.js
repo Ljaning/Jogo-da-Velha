@@ -1,5 +1,3 @@
-let restartButton = document.getElementById("restart");
-
 document.addEventListener("DOMContentLoaded", () => {
     let squares = document.querySelectorAll(".square");
     squares.forEach((square) => {
@@ -23,12 +21,13 @@ function updateSquare(position) {
 }
 
 // Botão para reiniciar o jogo.
-restartButton.addEventListener("click", () => {
-    let squares = document.getElementsByClassName("square");
-    for (let i of squares) {
-        i.innerHTML = "";
+let restartButton = document.getElementById("restart");
+restartButton.addEventListener("click", () => { // Quando o usuário clicar no botão dispara o evento click.
+    let squares = document.getElementsByClassName("square"); // Pega todos os quadrados(divs) do jogo e coloca na variável squares.
+    for (let i of squares) { // Lopping vai pegar todos os valores do array squares e colocar na variável i.
+        i.innerHTML = ""; // Passando um valor vazio para cada posição e imprimindo na tela.
     };
-    board = ['', '', '', '', '', '', '', '', ''];
+    board = ['', '', '', '', '', '', '', '', '']; // 
     playerTime = 0;
     gameOver = false;
 
