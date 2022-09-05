@@ -114,6 +114,13 @@ h1 {
     left: var(--x-after-left);
 }
 
+button {
+    background-color: #2C5364;
+    color: white;
+    border: none;
+    padding: 1rem;
+}
+
 
 
 
