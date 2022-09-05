@@ -24,7 +24,12 @@ function updateSquare(position) {
 
 // Botão para reiniciar o jogo.
 restartButton.addEventListener("click", () => {
+    let squares = document.getElementsByClassName("square");
+    for (let i of squares) {
+        i.innerHTML = "";
+    };
     board = ['', '', '', '', '', '', '', '', ''];
     playerTime = 0;
     gameOver = false;
+
 });
