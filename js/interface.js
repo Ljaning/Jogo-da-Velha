@@ -9,7 +9,7 @@ function handleClick(event) {
     let square = event.target;
     let position = square.id;
     if (handleMove(position)) {
-        document.getElementById("result").innerHTML = playerTime;
+        document.getElementById("result").innerHTML = playerTime; // Imprimindo na tela o vencedor da partida.
     };
     updateSquare(position);
 }
