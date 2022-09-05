@@ -30,5 +30,4 @@ restartButton.addEventListener("click", () => { // Quando o usuário clicar no b
     board = ['', '', '', '', '', '', '', '', '']; // 
     playerTime = 0;
     gameOver = false;
-
 });
