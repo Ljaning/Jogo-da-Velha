@@ -147,7 +147,7 @@ h1 {
 }
 
 button {
-    margin-top: 6rem;
+    margin-top: 4rem;
     background-color: #2C5364;
     color: white;
     border: none;
@@ -155,7 +155,7 @@ button {
 }
 
 input {
-    margin: 4rem;
+    margin-bottom: 4rem;
     font-size: 1rem;
     padding: 0.5rem;
     background-color: #0F2027;
