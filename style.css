@@ -60,6 +60,8 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
+    margin: 0;
+    padding: 0;
 }
 
 h1 {
@@ -123,6 +125,7 @@ h1 {
     display: flex;
     flex-direction: column;
     margin: auto;
+    width: 25%;
 }
 
 #playerO {
@@ -142,6 +145,8 @@ h1 {
     font-weight: bold;
     margin: auto;
     animation: text-focus-in 1s cubic-bezier(0.550, 0.085, 0.680, 0.530) both;
+    width: 25%;
+    text-align: center;
 }
 
 .item {
