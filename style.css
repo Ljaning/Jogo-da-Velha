@@ -7,9 +7,6 @@
     --body-background-one: #0F2027;  /* fallback for old browsers */
     --body-background-second: -webkit-linear-gradient(to right, #2C5364, #203A43, #0F2027);  /* Chrome 10-25, Safari 5.1-6 */
     --body-background-third: linear-gradient(to right, #2C5364, #203A43, #0F2027); /* W3C, IE 10+/ Edge, Firefox 16+, Chrome 26+, Opera 12+, Safari 7+ */
-    --body-display: flex;
-    --body-flex-direction: column;
-    --body-align-items: center;
 
     /* CSS H1 */
     --h1-color: white;
@@ -60,13 +57,9 @@ body {
     background: var(--body-background-one);
     background: var(--body-background-second);
     background: var(--body-background-third);
-    /* display: var(--body-display); */
-    /* flex-direction: var(--body-flex-direction);
-    align-items: var(--body-align-items); */
     display: flex;
     align-items: center;
     justify-content: center;
-    
 }
 
 h1 {
@@ -79,6 +72,7 @@ h1 {
     flex-direction: column;
     align-items: center;
     margin: auto;
+    animation: text-focus-in 1s cubic-bezier(0.550, 0.085, 0.680, 0.530) both;
 }
 
 .square {
@@ -86,6 +80,7 @@ h1 {
     height: var(--square-height);
     background-color: var(--square-background-color);
     display: var(--square-display);
+    cursor: pointer;
 }
 
 .o {
@@ -130,12 +125,23 @@ h1 {
     margin: auto;
 }
 
+#playerO {
+    animation: bounce-in-left 1.1s 500ms both;
+}
+
+#playerX {
+    animation: bounce-in-left 1.1s 1000ms both;
+}
+
 .display {
     display: flex;
     flex-direction: column;
     color: white;
     font-size: 1.3rem;
+    text-transform: uppercase;
+    font-weight: bold;
     margin: auto;
+    animation: text-focus-in 1s cubic-bezier(0.550, 0.085, 0.680, 0.530) both;
 }
 
 .item {
@@ -147,20 +153,103 @@ h1 {
 }
 
 button {
-    margin-top: 4rem;
     background-color: #2C5364;
     color: white;
     border: none;
     padding: 1rem;
+    border-radius: 0.3rem;
+    font-size: 1rem;
+    animation: bounce-in-left 1.1s 1100ms both;
+    cursor: pointer;
+}
+
+button:hover {
+    background-color: #203A43;
 }
 
 input {
     margin-bottom: 4rem;
-    font-size: 1rem;
-    padding: 0.5rem;
+    font-size: 0.8rem;
+    padding: 1rem;
     background-color: #0F2027;
     border: none;
+    border-radius: 0.3rem;
+    color: white;
 }
+
+input:focus {
+    outline: none;
+    animation: shadow-drop-center 0.4s cubic-bezier(0.250, 0.460, 0.450, 0.940) both;
+}
+
+input::placeholder {
+    color: rgba(255, 255, 255, 0.650);
+}
+
+ @keyframes shadow-drop-center {
+    0% {
+      box-shadow: 0 0 0 0 rgba(0, 0, 0, 0);
+    }
+    100% {
+      box-shadow: 0 0 20px 0px rgba(0, 0, 0, 0.35);
+    }
+  }
+
+@keyframes text-focus-in {
+    0% {
+      filter: blur(12px);
+      opacity: 0;
+    }
+    100% {
+      filter: blur(0px);
+      opacity: 1;
+    }
+  }
+
+ @keyframes bounce-in-left {
+    0% {
+      transform: translateX(-600px);
+      animation-timing-function: ease-in;
+      opacity: 0;
+    }
+    38% {
+      transform: translateX(0);
+      animation-timing-function: ease-out;
+      opacity: 1;
+    }
+    55% {
+      transform: translateX(-68px);
+      animation-timing-function: ease-in;
+    }
+    72% {
+      transform: translateX(0);
+      animation-timing-function: ease-out;
+    }
+    81% {
+      transform: translateX(-28px);
+      animation-timing-function: ease-in;
+    }
+    90% {
+      transform: translateX(0);
+      animation-timing-function: ease-out;
+    }
+    95% {
+      transform: translateX(-8px);
+      animation-timing-function: ease-in;
+    }
+    100% {
+      transform: translateX(0);
+      animation-timing-function: ease-out;
+    }
+  }
+  
+
+  
+  
+  
+  
+  
+  
 
 
 
