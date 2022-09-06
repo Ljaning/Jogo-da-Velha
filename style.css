@@ -186,6 +186,12 @@ input::placeholder {
     color: rgba(255, 255, 255, 0.650);
 }
 
+p {
+    margin-top: 4rem;
+    color: rgba(255, 255, 255, 0.600);
+    font-weight: lighter;
+}
+
  @keyframes shadow-drop-center {
     0% {
       box-shadow: 0 0 0 0 rgba(0, 0, 0, 0);
