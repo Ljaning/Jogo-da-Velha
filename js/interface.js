@@ -26,12 +26,12 @@ function updateSquare(position) {
 // Botão para reiniciar o jogo.
 let restartButton = document.getElementById("restart");
 restartButton.addEventListener("click", () => { // Quando o usuário clicar no botão dispara o evento click.
-    let result = document.getElementById("result"); 
+    let result = document.getElementById("result");  // Pega o valor do resultado e joga na variável result.
     let squares = document.getElementsByClassName("square"); // Pega todos os quadrados(divs) do jogo e coloca na variável squares.
     for (let i of squares) { // Lopping vai pegar todos os valores do array squares e colocar na variável i.
         i.innerHTML = ""; // Passando um valor vazio para cada posição e imprimindo na tela.
     };
-    result.innerHTML = "";
+    result.innerHTML = ""; // Limpa o valor da variável result onde mostra o vencedor.
     board = ['', '', '', '', '', '', '', '', '']; // 
     playerTime = 0;
     gameOver = false;
