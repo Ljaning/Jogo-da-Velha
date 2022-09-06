@@ -196,6 +196,7 @@ p {
     font-weight: lighter;
     font-size: 0.8rem;
     text-align: center;
+    animation: bounce-in-left 1.1s 1300ms both;
 }
 
 @keyframes text-focus-in {
