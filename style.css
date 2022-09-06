@@ -194,6 +194,8 @@ p {
     margin-top: 4rem;
     color: rgba(255, 255, 255, 0.600);
     font-weight: lighter;
+    font-size: 0.8rem;
+    text-align: center;
 }
 
 @keyframes text-focus-in {
