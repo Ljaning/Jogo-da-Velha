@@ -7,6 +7,11 @@
     --body-background-one: #0F2027;  /* fallback for old browsers */
     --body-background-second: -webkit-linear-gradient(to right, #2C5364, #203A43, #0F2027);  /* Chrome 10-25, Safari 5.1-6 */
     --body-background-third: linear-gradient(to right, #2C5364, #203A43, #0F2027); /* W3C, IE 10+/ Edge, Firefox 16+, Chrome 26+, Opera 12+, Safari 7+ */
+    --body-display: flex;
+    --body-align-items: center;
+    --body-justify-content: center;
+    --body-margin: 0;
+    --body-padding: 0;
 
     /* CSS H1 */
     --h1-color: white;
@@ -17,6 +22,14 @@
     --square-height: 200px;
     --square-background-color: #6dd5ed;
     --square-display: inline-block;
+    --square-cursor: pointer;
+
+    /* CSS Container */
+    --container-display: flex;
+    --container-flex-direction: column;
+    --container-align-items: center;
+    --container-margin: auto;
+    --container-animation: text-focus-in 1s cubic-bezier(0.550, 0.085, 0.680, 0.530) both;
 
     /* CSS o */
     --o-position: relative;
@@ -50,6 +63,11 @@
     --x-after-display: flex;
     --x-after-justify-content: center;
 
+    /* CSS Inputs */
+    --inputs-display: flex;
+    --inputs-flex-direction: column;
+    --inputs-margin: auto;
+    --inputs-width: 25%;
 }
 
 body {
@@ -57,11 +75,11 @@ body {
     background: var(--body-background-one);
     background: var(--body-background-second);
     background: var(--body-background-third);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 0;
-    padding: 0;
+    display: var(--body-display);
+    align-items: var(--body-align-items);
+    justify-content: var(--body-justify-content);
+    margin: var(--body-margin);
+    padding: var(--body-padding);
 }
 
 h1 {
@@ -70,11 +88,11 @@ h1 {
 }
 
 .container {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    margin: auto;
-    animation: text-focus-in 1s cubic-bezier(0.550, 0.085, 0.680, 0.530) both;
+    display: var(--container-display);
+    flex-direction: var(--container-flex-direction);
+    align-items: var(--container-align-items);
+    margin: var(--container-margin);
+    animation: var(--container-animation); 
 }
 
 .square {
@@ -82,7 +100,7 @@ h1 {
     height: var(--square-height);
     background-color: var(--square-background-color);
     display: var(--square-display);
-    cursor: pointer;
+    cursor: var(--square-cursor);
 }
 
 .o {
@@ -122,10 +140,10 @@ h1 {
 }
 
 .inputs {
-    display: flex;
-    flex-direction: column;
-    margin: auto;
-    width: 25%;
+    display: var(--inputs-display);
+    flex-direction: var(--inputs-flex-direction);
+    margin: var(--inputs-margin);
+    width: var(--inputs-width);
 }
 
 #playerO {
