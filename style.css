@@ -73,6 +73,12 @@
     --inputs-flex-direction: column;
     --inputs-margin: auto;
     --inputs-width: 25%;
+
+    /* CSS PlayerO */
+    --playerO-animation: bounce-in-left 1.1s 500ms both;
+
+    /* CSS PlayerX */
+    --playerX-animation: bounce-in-left 1.1s 1000ms both;
 }
 
 body {
@@ -152,11 +158,11 @@ h1 {
 }
 
 #playerO {
-    animation: bounce-in-left 1.1s 500ms both;
+    animation: var(--playerO-animation);
 }
 
 #playerX {
-    animation: bounce-in-left 1.1s 1000ms both;
+    animation: var(--playerX-animation);
 }
 
 .display {
