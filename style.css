@@ -3,6 +3,11 @@
 :root {
 
     /* CSS Body */
+    --body-display: flex;
+    --body-align-items: center;
+    --body-justify-content: center;
+    --body-padding: 0;
+    --body-margin: 0;
     --body-font-family: 'Open Sans', sans-serif;
     --body-background-one: #0F2027;  /* fallback for old browsers */
     --body-background-second: -webkit-linear-gradient(to right, #2C5364, #203A43, #0F2027);  /* Chrome 10-25, Safari 5.1-6 */
@@ -214,7 +219,10 @@ p {
     font-weight: lighter;
     font-size: 0.8rem;
     text-align: center;
+    animation: bounce-in-left 1.1s 1300ms both;
 }
+
+/* Animações */
 
 @keyframes text-focus-in {
     0% {
