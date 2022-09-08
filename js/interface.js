@@ -1,6 +1,9 @@
 let playerO = document.getElementById("playerO");
 let playerX = document.getElementById("playerX");
 
+console.log(playerO);
+console.log(playerX);
+
 document.addEventListener("DOMContentLoaded", () => {
     let squares = document.querySelectorAll(".square");
     squares.forEach((square) => {

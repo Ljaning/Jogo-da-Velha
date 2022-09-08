@@ -186,11 +186,17 @@ h1 {
     order: 2;
 }
 
+.buttons {
+  display: flex;
+  flex-direction: column;
+}
+
 button {
     background-color: #2C5364;
     color: white;
     border: none;
     padding: 1rem;
+    margin-bottom: 1.5rem;
     border-radius: 0.3rem;
     font-size: 1rem;
     animation: bounce-in-left 1.1s 1100ms both;
