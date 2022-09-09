@@ -91,6 +91,7 @@ body {
     justify-content: var(--body-justify-content);
     margin: var(--body-margin);
     padding: var(--body-padding);
+    height: 100vh;
 }
 
 h1 {
