@@ -98,6 +98,10 @@ h1 {
     text-transform: var(--h1-text-transform);
 }
 
+h3 {
+  color:#6dd5ed
+}
+
 .container {
     display: var(--container-display);
     flex-direction: var(--container-flex-direction);
