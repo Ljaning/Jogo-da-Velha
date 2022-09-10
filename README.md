@@ -2,7 +2,7 @@
 
 <h3>Sobre o Projeto</h3>
 
-<p> Jogo da Velha, projeto desenvolvido pelo curso <strong>Desenvolvedor Web Full Stack ProgramadorBr</strong>.</p>
+<p> Jogo da Velha, projeto desenvolvido pelo curso <strong>Desenvolvedor Web Full Stack ProgramadorBr</strong>, porém, o design foi todo reestruturado.</p>
 
 <h4>Stacks do Projeto</h4>
 
