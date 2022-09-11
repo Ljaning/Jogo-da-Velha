@@ -10,7 +10,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;500;700&display=swap" rel="stylesheet">
 </head>
-<body>
+<body onload="verificarJogador()">
         <div class="container item">
             <h1>Jogo da Velha</h1>
             <div class="stage">
@@ -35,7 +35,7 @@
             <input type="text" name="" id="playerO" placeholder="Digite seu nome jogador O">
             <input type="text" name="" id="playerX" placeholder="Digite seu nome jogador X">
             <div class="buttons">
-                <button id="save">Salvar jogadores</button>
+                <button id="save" onclick="nameSave()">Salvar jogadores</button>
                 <button id="restart">Reiniciar jogo</button>
             </div>
             <p>Desenvolvido por Lucas Janing</p>
