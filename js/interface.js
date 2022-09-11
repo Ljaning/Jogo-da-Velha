@@ -23,13 +23,13 @@ function handleClick(event) {
         };
     };
     updateSquare(position);
-}
+};
 
 function updateSquare(position) {
     let square = document.getElementById(position.toString());
     let symbol = board[position];
     square.innerHTML = `<div class="${symbol}"></div>`
-}
+};
 
 // Botão para reiniciar o jogo.
 let restartButton = document.getElementById("restart");
