@@ -45,18 +45,18 @@ function nameSave() { // Botão para salvar os nomes dos jogadores.
     localStorage.setItem("players", JSON.stringify(players)); // Transformando os nomes dentro do array em strings, e depois adicionando ao localStorage.
 };
 
-function verificarJogador() {
-    let players = localStorage.getItem("players");
+function verificarJogador() { // Método onload para verificar se existe jogadores.
+    let players = localStorage.getItem("players"); // Pega os jogadores do localStorage e coloca na variável players.
 
-    if (players == null) {
+    if (players == null) { // Se players estiver vázio não faz nada.
 
-    } else {
-        players = JSON.parse(players);
-        let playerO = document.getElementById("playerO");
-        let playerX = document.getElementById("playerX");
+    } else {  // Se não estiver com valor
+        players = JSON.parse(players); // Transforma os jogadores do array em objeto, e coloca na variável players.
+        let playerO = document.getElementById("playerO"); // Pega o valor do input player O e coloca na variável playerO.
+        let playerX = document.getElementById("playerX"); // Pega o valor do input player X e coloca na variável playerX.
 
-        playerO.setAttribute("placeholder", players[0]);
-        playerX.setAttribute("placeholder", players[1]);
+        playerO.setAttribute("placeholder", players[0]); // Coloca o nome do jogador O no placeholder.
+        playerX.setAttribute("placeholder", players[1]); // Coloca o nome do jogador X no placeholder.
     };
 };
 
