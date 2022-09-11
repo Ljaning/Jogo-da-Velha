@@ -9,8 +9,18 @@ function handleClick(event) {
     let square = event.target;
     let position = square.id;
     if (handleMove(position)) {
+        let players = localStorage.getItem("players");
+        players = JSON.parse(players);
         document.getElementById("mensagem").innerHTML = "Fim de jogo!";
-        document.getElementById("result").innerHTML = playerTime; // Imprimindo na tela o vencedor da partida.
+        if (players == null) { // Mostrando o vencedor na tela.
+            document.getElementById("result").innerHTML = playerTime;
+        } else {
+            if (playerTime == 0) { 
+                document.getElementById("result").innerHTML = players[0];
+            } else {
+                document.getElementById("result").innerHTML = players[1];
+            };
+        };
     };
     updateSquare(position);
 }
@@ -31,10 +41,11 @@ restartButton.addEventListener("click", () => { // Quando o usuário clicar no b
         i.innerHTML = ""; // Passando um valor vazio para cada posição e imprimindo na tela.
     };
     mensagem.innerHTML = "";
-    result.innerHTML = ""; // Limpa o valor da variável result onde mostra o vencedor.
     board = ['', '', '', '', '', '', '', '', '']; // 
     playerTime = 0;
     gameOver = false;
+    result = document.getElementById("result");
+    result.innerHTML = "";
 });
 
 function namesSave() { // Botão para salvar os nomes dos jogadores.
@@ -45,14 +56,14 @@ function namesSave() { // Botão para salvar os nomes dos jogadores.
     localStorage.setItem("players", JSON.stringify(players)); // Transformando os nomes dentro do array em strings, e depois adicionando ao localStorage.
 };
 
-function namesDelet() {
-    localStorage.removeItem("players");
+function namesDelet() { // Botão para deletar os nomes dos jogadores.
+    localStorage.removeItem("players"); // Remove os valores do localStorage.
 
-    let playerO = document.getElementById("playerO");
-    let playerX = document.getElementById("playerX");
+    let playerO = document.getElementById("playerO"); // Pega o valor do input player O e coloca na variável playerO.
+    let playerX = document.getElementById("playerX"); // Pega o valor do input player X e coloca na variável playerX.
 
-    playerO.setAttribute("placeholder", "Digite seu nome jogador O");
-    playerX.setAttribute("placeholder", "Digite seu nome jogador X");
+    playerO.setAttribute("placeholder", "Digite seu nome jogador O"); // Coloca a frase do placeholder no input player O.
+    playerX.setAttribute("placeholder", "Digite seu nome jogador X"); // Coloca a frase do placeholder no input X.
 };
 
 function verificarJogador() { // Método onload para verificar se existe jogadores.
