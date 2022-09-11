@@ -37,12 +37,22 @@ restartButton.addEventListener("click", () => { // Quando o usuário clicar no b
     gameOver = false;
 });
 
-function nameSave() { // Botão para salvar os nomes dos jogadores.
+function namesSave() { // Botão para salvar os nomes dos jogadores.
     let playerO = document.getElementById("playerO").value; // Pegando o valor do input do jogador O.
     let playerX = document.getElementById("playerX").value; // Pegando o valor do input do jogador X.
 
     let players = [playerO, playerX] // Adicionando os dois jogadores em um array.
     localStorage.setItem("players", JSON.stringify(players)); // Transformando os nomes dentro do array em strings, e depois adicionando ao localStorage.
+};
+
+function namesDelet() {
+    localStorage.removeItem("players");
+
+    let playerO = document.getElementById("playerO");
+    let playerX = document.getElementById("playerX");
+
+    playerO.setAttribute("placeholder", "Digite seu nome jogador O");
+    playerX.setAttribute("placeholder", "Digite seu nome jogador X");
 };
 
 function verificarJogador() { // Método onload para verificar se existe jogadores.
