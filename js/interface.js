@@ -7,9 +7,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
 function timedText() {
     let mensagem = document.getElementById("mensagens");
-    setTimeout(function(){ mensagem.innerHTML="Ei, o jogo já começou" }, 20000);
-    setTimeout(function(){ mensagem.innerHTML="Quem será que vai vencer" }, 50000);
-    setTimeout(function(){ mensagem.innerHTML="Esse jogo esta disputado" }, 150000);
+    setTimeout(function(){ mensagem.innerHTML="Ei, o jogo já começou!" }, 20000);
+    setTimeout(function(){ mensagem.innerHTML="Quem será que vai vencer?" }, 50000);
+    setTimeout(function(){ mensagem.innerHTML="Esse jogo tá disputado em..." }, 150000);
 };
 
 function handleClick(event) {
