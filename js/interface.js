@@ -5,10 +5,18 @@ document.addEventListener("DOMContentLoaded", () => {
     })
 });
 
+function timedText() {
+    let mensagem = document.getElementById("mensagens");
+    setTimeout(function(){ mensagem.innerHTML="Ei, o jogo já começou" }, 20000);
+    setTimeout(function(){ mensagem.innerHTML="Quem será que vai vencer" }, 50000);
+    setTimeout(function(){ mensagem.innerHTML="Esse jogo esta disputado" }, 150000);
+};
+
 function handleClick(event) {
     let square = event.target;
     let position = square.id;
     if (handleMove(position)) {
+
         let players = localStorage.getItem("players");
         players = JSON.parse(players);
         document.getElementById("mensagem").innerHTML = "Fim de jogo!";

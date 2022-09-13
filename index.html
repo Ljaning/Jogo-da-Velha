@@ -14,7 +14,7 @@
 <body onload="verificarJogador()">
         <div class="container item">
             <h1>Jogo da Velha</h1>
-            <div class="stage">
+            <div onclick="timedText()" class="stage">
                 <div>
                     <div class="square" id="0"></div>
                     <div class="square" id="1"></div>
@@ -46,6 +46,7 @@
             <h3 id="mensagem"></h3>
             <h2>Vencedor</h2>
             <h1 id="result"></h1>
+            <p id="mensagens"></p>
         </div>
         <script src="./js/game.js"></script>
         <script src="./js/interface.js"></script>
