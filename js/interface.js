@@ -7,9 +7,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
 function timedText() {
     let mensagem = document.getElementById("mensagens");
-    setTimeout(function(){ mensagem.innerHTML="Ei, o jogo já começou!" }, 20000);
-    setTimeout(function(){ mensagem.innerHTML="Quem será que vai vencer?" }, 50000);
-    setTimeout(function(){ mensagem.innerHTML="Esse jogo tá disputado em..." }, 150000);
+    setTimeout(function () { mensagem.innerHTML = "Ei, o jogo já começou!" }, 20000);
+    setTimeout(function () { mensagem.innerHTML = "Quem será que vai vencer?" }, 50000);
+    setTimeout(function () { mensagem.innerHTML = "Esse jogo tá disputado em..." }, 150000);
 };
 
 function handleClick(event) {
@@ -23,7 +23,7 @@ function handleClick(event) {
         if (players == null) { // Mostrando o vencedor na tela.
             document.getElementById("result").innerHTML = playerTime;
         } else {
-            if (playerTime == 0) { 
+            if (playerTime == 0) {
                 document.getElementById("result").innerHTML = players[0];
             } else {
                 document.getElementById("result").innerHTML = players[1];
@@ -88,4 +88,6 @@ function verificarJogador() { // Método onload para verificar se existe jogador
         playerX.setAttribute("placeholder", players[1]); // Coloca o nome do jogador X no placeholder.
     };
 };
+
+
 

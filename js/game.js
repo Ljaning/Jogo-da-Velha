@@ -28,7 +28,7 @@ function handleMove(position) {
 
         if (gameOver == false) { // Se gameOver for falso.
             // Se jogador da vez for zero, troca a vez para o jogador 1 se não jogador 0 joga.
-            playerTime = (playerTime == 0) ? 1 : 0; 
+            playerTime = (playerTime == 0) ? 1 : 0;
         }
     }
     return gameOver; // Se for verdadeiro, retorna gameOver.
