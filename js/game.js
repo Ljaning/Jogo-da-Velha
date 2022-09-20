@@ -5,6 +5,7 @@ let board = ['', '', '', '', '', '', '', '', '']; // Quadrados do jogo da velha.
 let playerTime = 0; // Jogador 0 e 1.
 let symbols = ['o', 'x']; // Símbolos dos jogadores, o = 0 e x = 1.
 let gameOver = false; // Iniciando a variável gameOver como falso.
+let jogadas = 9; // Número de jogadas totais.
 let winStates = [ // Array de cada quadrado onde será armazenado as posições.
     [0, 1, 2],
     [3, 4, 5],
@@ -32,7 +33,7 @@ function handleMove(position) {
         }
     }
     return gameOver; // Se for verdadeiro, retorna gameOver.
-}
+};
 
 function isWin() { // Função Vitória
     for (let i = 0; i < winStates.length; i++) { // Looping dentro do array winStates.
@@ -47,4 +48,13 @@ function isWin() { // Função Vitória
         }
     }
     return false; // Retorna falso.
-}
+};
+
+function contador(div) {
+    if (div.firstChild == null) {
+        if (gameOver == false) {
+            jogadas -= 1;
+            console.log(jogadas);
+        };
+    };
+};
