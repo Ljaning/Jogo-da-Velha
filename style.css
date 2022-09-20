@@ -244,6 +244,10 @@ p {
   font-size: 1rem;
 }
 
+#counted {
+  color: white;
+}
+
 /* Keyframes Animações */
 
 @keyframes text-focus-in {
