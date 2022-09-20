@@ -7,9 +7,23 @@ document.addEventListener("DOMContentLoaded", () => {
 
 function timedText() {
     let mensagem = document.getElementById("mensagens");
-    setTimeout(function () { mensagem.innerHTML = "Ei, o jogo já começou!" }, 20000);
-    setTimeout(function () { mensagem.innerHTML = "Quem será que vai vencer?" }, 50000);
-    setTimeout(function () { mensagem.innerHTML = "Esse jogo tá disputado em..." }, 150000);
+    let idResultado = document.getElementById("result");
+
+    if (gameOver == true) { // Se o game over for verdadeiro.
+        mensagem.innerHTML = ""; // Ele coloca vazio em mensagem.
+
+    } else { // Se game over for falso.
+
+        if (jogadas == "8") { // Se o número de jogadas for igual a 8.
+            mensagem.innerHTML = "Ei, o jogo já começou!"; // Mensagem exibida.
+
+        } else if (jogadas == "6") { // Se o número de jogadas for igual a 6.
+            
+            if (idResultado.textContent == "") {
+                mensagem.innerHTML = "Quem será que vai vencer?";
+            }
+        }
+    }
 };
 
 function handleClick(event) {
