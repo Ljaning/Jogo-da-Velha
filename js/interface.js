@@ -19,11 +19,16 @@ function timedText() {
 
         } else if (jogadas == "6") { // Se o número de jogadas for igual a 6.
             
-            if (idResultado.textContent == "") {
-                mensagem.innerHTML = "Quem será que vai vencer?";
+            if (idResultado.textContent == "") {  // Verifica se o resultado é igual a nada.
+                mensagem.innerHTML = "Quem será que vai vencer?"; // Se sim, exibe a mensagem.
             }
-        }
-    }
+        } else if (jogadas == "2") { // Se o número de jogadas for igual a 2.
+            
+            if (idResultado.textContent = "") { // Verifica se o resultado é igual a nada.
+                mensagem.innerHTML = "O jogo tá disputado em..."; // Se sim, exibe a mensagem.
+            };
+        };
+    };
 };
 
 function handleClick(event) {
