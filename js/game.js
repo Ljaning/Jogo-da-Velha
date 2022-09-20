@@ -54,7 +54,6 @@ function contador(div) {
     if (div.firstChild == null) {
         if (gameOver == false) {
             jogadas -= 1;
-            console.log(jogadas);
         };
     };
 };
