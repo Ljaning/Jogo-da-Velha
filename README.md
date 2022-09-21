@@ -6,17 +6,17 @@
 
 <h4>Stacks do Projeto</h4>
 
-<ol> 
+<ul> 
  
  <li>HTML</li>
  <li>CSS</li>
  <li>JavaScript</li>
  
- </ol>
+ </ul>
  
  <h4>Como jogar</h4>
  
- <ul>
+ <ol>
  
  <li>Digite o nome dos dois jogadores nos campos</li>
  <li>Clique no botão <strong>Salvar jogadores</stron>, para salvar os nomes dos jogadores.</li>
@@ -25,5 +25,5 @@
  <li>Ao fim do jogo, caso queira continuar, clique no botão <strong>Reiniciar jogo</strong>, para reiniciar a partida</li>
  <li>Em caso de alteração de nomes, clique no botão <strong>Deletar jogadores</strong>, para apagar os nomes, depois, siga os mesmos passos descritos.</li>
  
- </ul>
+ </ol>
 
