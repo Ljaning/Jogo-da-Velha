@@ -78,6 +78,8 @@ restartButton.addEventListener("click", () => { // Quando o usuário clicar no b
     result.innerHTML = "";
     counted = document.getElementById("counted");
     counted.innerHTML = "";
+    randomName = document.getElementById("sorteado");
+    randomName.innerHTML = "";
 });
 
 function namesSave() { // Botão para salvar os nomes dos jogadores.
