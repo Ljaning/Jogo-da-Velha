@@ -14,7 +14,7 @@
  
  </ul>
  
-Ainda não está responsivo para mobile.
+Ainda não é online, e não está responsivo para mobile.
  
  <h4>Como jogar</h4>
  
