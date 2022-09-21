@@ -201,7 +201,7 @@ button {
     color: white;
     border: none;
     padding: 1rem;
-    margin-bottom: 1.5rem;
+    margin-bottom: 1.7rem;
     border-radius: 0.3rem;
     font-size: 1rem;
     animation: bounce-in-left 1.1s 1100ms both;
@@ -213,7 +213,7 @@ button:hover {
 }
 
 input {
-    margin-bottom: 4rem;
+    margin-bottom: 2rem;
     font-size: 0.8rem;
     padding: 1rem;
     background-color: #0F2027;
@@ -245,6 +245,10 @@ p {
 }
 
 #counted {
+  color: white;
+}
+
+#sorteado {
   color: white;
 }
 

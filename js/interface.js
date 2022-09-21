@@ -111,5 +111,13 @@ function verificarJogador() { // Método onload para verificar se existe jogador
     };
 };
 
+function sorteador() {
+    let playerO = document.getElementById("playerO").value;
+    let playerX = document.getElementById("playerX").value;
+    let players = [playerO, playerX]
+    let randomName = players[Math.floor(Math.random() * players.length)];
+    document.getElementById("sorteado").innerHTML = "Quem começa a jogar é " + randomName;
+};
+
 
 
