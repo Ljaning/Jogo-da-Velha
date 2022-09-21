@@ -25,5 +25,5 @@
  <li>Ao fim do jogo, caso queira continuar, clique no botão <strong>Reiniciar jogo</strong>, para reiniciar a partida</li>
  <li>Em caso de alteração de nomes, clique no botão <strong>Deletar jogadores</strong>, para apagar os nomes, depois, siga os mesmos passos descritos.</li>
  
- 
+ </ul>
 
