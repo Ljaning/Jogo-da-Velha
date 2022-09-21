@@ -23,7 +23,7 @@
  <li>Clique no botão <strong>Sortear jogador</strong>, para saber quem irá começar a jogada.</li>
  <li>Pronto! Partiu game.</li>
  <li>Ao fim do jogo, caso queira continuar, clique no botão <strong>Reiniciar jogo</strong>, para reiniciar a partida.</li>
- <li>Em caso de alteração de nomes, clique no botão <strong>Deletar jogadores</strong>, para apagar os nomes, depois, siga os mesmos passos descritos.</li>
+ <li>Em caso de alteração de nomes, clique no botão <strong>Deletar jogadores</strong>, para apagar os nomes, depois, siga os mesmos passos descritos no início das instruções.</li>
  
  </ol>
 
