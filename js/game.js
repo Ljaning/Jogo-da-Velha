@@ -54,7 +54,7 @@ function contador(div) {
     if (div.firstChild == null) {
         if (gameOver == false) {
             jogadas -= 1;
-            document.getElementById("counted").innerHTML = "Faltam " + jogadas + " jogadas";
+            document.getElementById("counted").innerHTML = "Restam " + jogadas + " jogadas";
         };
     };
 };
