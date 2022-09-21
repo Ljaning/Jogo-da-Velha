@@ -19,7 +19,7 @@
  <ol>
  
  <li>Digite o nome dos dois jogadores nos campos</li>
- <li>Clique no botão <strong>Salvar jogadores</stron>, para salvar os nomes dos jogadores.</li>
+ <li>Clique no botão <strong>Salvar jogadores</strong>, para salvar os nomes dos jogadores.</li>
  <li>Clique no botão <strong>Sortear jogador</strong>, para saber quem irá começar a jogada.</li>
  <li>Pronto! Partiu game.</li>
  <li>Ao fim do jogo, caso queira continuar, clique no botão <strong>Reiniciar jogo</strong>, para reiniciar a partida</li>
