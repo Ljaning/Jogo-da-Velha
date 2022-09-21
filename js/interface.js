@@ -76,6 +76,8 @@ restartButton.addEventListener("click", () => { // Quando o usuário clicar no b
     gameOver = false;
     result = document.getElementById("result");
     result.innerHTML = "";
+    counted = document.getElementById("counted");
+    counted.innerHTML = "";
 });
 
 function namesSave() { // Botão para salvar os nomes dos jogadores.
