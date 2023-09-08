@@ -1,5 +1,7 @@
 ![Captura de tela 2022-08-11 223659](https://user-images.githubusercontent.com/59028003/191624173-e2806d8c-cc75-423c-bc70-05b328725607.png)
 
+https://jogodavelhalj.netlify.app/
+
 <h3>Sobre o Projeto</h3>
 
 <p> Jogo da Velha, projeto desenvolvido pelo curso <strong>Desenvolvedor Web Full Stack ProgramadorBr</strong>, porém, o design foi todo reestruturado.</p>
