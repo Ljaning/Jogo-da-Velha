@@ -1,0 +1,48 @@
+name: GPT Triage
+
+on:
+  issues:
+    types: [opened]
+
+jobs:
+  ask-gpt:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call OpenAI Assistants
+        uses: actions/github-script@v7
+        env:
+          OPENAI_KEY: ${{ secrets.OPENAI_KEY }}
+          ASSISTANT_ID: ai_asst_XXXXXXXXXXXX
+        with:
+          script: |
+            const axios = require('axios');
+
+            // 1. Cria thread com a descrição da issue
+            const thread = await axios.post(
+              'https://api.openai.com/v1/threads',
+              { messages: [
+                  { role: 'user',
+                    content: `Título: ${context.payload.issue.title}\n\n${context.payload.issue.body}` }
+                ]},
+              { headers: { Authorization: `Bearer ${process.env.OPENAI_KEY}` } }
+            );
+
+            // 2. Dispara o run nesse thread
+            const run = await axios.post(
+              `https://api.openai.com/v1/threads/${thread.data.id}/runs`,
+              { assistant_id: process.env.ASSISTANT_ID },
+              { headers: { Authorization: `Bearer ${process.env.OPENAI_KEY}` } }
+            );
+
+            // 3. Poll até terminar
+            let status;
+            do {
+              await new Promise(r => setTimeout(r, 4000));
+              const r = await axios.get(
+                `https://api.openai.com/v1/threads/${thread.data.id}/runs/${run.data.id}`,
+                { headers: { Authorization: `Bearer ${process.env.OPENAI_KEY}` } }
+              );
+              status = r.data.status;
+            } while (status !== 'completed' && status !== 'failed');
+
+            if (status === 'failed') core.setFailed('Run falhou');
