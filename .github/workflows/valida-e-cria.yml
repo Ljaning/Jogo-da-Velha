@@ -2,7 +2,7 @@ name: Validar solicitação com Gemini 2.0 Flash e criar issue
 
 on:
   issues:
-    types: [opened]
+    types: [opened, labeled]
 
 permissions:
   issues: write
@@ -11,7 +11,10 @@ permissions:
 jobs:
   gatekeep:
     runs-on: ubuntu-latest
-    if: contains(github.event.issue.labels.*.name, 'solicitacao')
+    # roda se já veio com a label ao abrir, OU se acabou de rotular com 'solicitacao'
+    if: >
+      contains(github.event.issue.labels.*.name, 'solicitacao') ||
+      (github.event.action == 'labeled' && github.event.label.name == 'solicitacao')
 
     steps:
       - name: Extrair campos do formulário
