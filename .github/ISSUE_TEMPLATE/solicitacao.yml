@@ -1,0 +1,36 @@
+name: Solicitação de criação de issue
+description: Forneça detalhes para análise automática
+title: "[Solicitação] <resumo curto>"
+labels: ["solicitacao"]
+body:
+  - type: input
+    id: titulo
+    attributes:
+      label: Título sugerido
+    validations:
+      required: true
+  - type: textarea
+    id: problema
+    attributes:
+      label: Descrição / Problema
+    validations:
+      required: true
+  - type: textarea
+    id: passos
+    attributes:
+      label: Passos para reproduzir (se bug)
+  - type: textarea
+    id: criterio
+    attributes:
+      label: Critérios de aceite
+    validations:
+      required: true
+  - type: dropdown
+    id: destino
+    attributes:
+      label: Repositório de destino
+      options:
+        - org/repo-a
+        - org/repo-b
+    validations:
+      required: true
