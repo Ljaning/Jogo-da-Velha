@@ -30,7 +30,6 @@ body:
     attributes:
       label: Repositório de destino
       options:
-        - org/repo-a
-        - org/repo-b
+        - Ljaning/Jogo-da-Velha
     validations:
       required: true
