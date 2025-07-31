@@ -120,14 +120,18 @@ jobs:
       - name: Extrair campos do formulário
         id: parse
         run: |
-          BODY=$(cat issue_body.md)
+          set -e
+
+          BODY=$(printf "%s" "${{ github.event.issue.body }}")
 
           extrair() {
-            echo "$BODY" | awk -v header="### $1" '
-              $0==header {flag=1; next}
-              /^### / && flag {flag=0}
+            # Match robusto do cabeçalho "### <label>" ignorando espaços à direita
+            awk -v header="$1" '
+              BEGIN{ pat="^### " header "[[:space:]]*$" }
+              $0 ~ pat {flag=1; next}
+              /^### [^#]/ && flag {flag=0}
               flag {print}
-            ' | sed "s/^[[:space:]]*//; s/[[:space:]]*$//"
+            ' <<< "$BODY" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//'
           }
 
           DESCRICAO=$(extrair "Descrição do Bug")
@@ -135,7 +139,12 @@ jobs:
           PASSOS=$(extrair "Passos para Reprodução")
           EVIDENCIAS=$(extrair "Evidências")
           RESULTADO=$(extrair "Resultado Esperado")
+
+          # Tenta extrair o destino por diferentes rótulos (fallbacks)
           DESTINO=$(extrair "Repositório de destino" | head -n 1)
+          if [ -z "$DESTINO" ]; then DESTINO=$(extrair "Destino" | head -n 1); fi
+          if [ -z "$DESTINO" ]; then DESTINO=$(extrair "Target repository" | head -n 1); fi
+          if [ -z "$DESTINO" ]; then DESTINO=$(extrair "Repositório" | head -n 1); fi
 
           TITULO=$(printf "%s" "$DESCRICAO" | sed -n '1p' | sed 's/#\+//g; s/\r//g')
           [ -z "$TITULO" ] && TITULO="Bug report"
@@ -149,6 +158,10 @@ jobs:
             echo "destino=$DESTINO";
             echo "titulo=$TITULO";
           } >> $GITHUB_OUTPUT
+
+          echo "::group::DEBUG parse"
+          echo "Destino extraído: '${DESTINO}'"
+          echo "::endgroup::"
 
       # 4) Pré-validação determinística
       - name: Pré-validação determinística
