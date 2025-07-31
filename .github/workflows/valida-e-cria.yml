@@ -47,8 +47,11 @@ jobs:
           EVIDENCIAS=$(extrair "Evidências")
           RESULTADO=$(extrair "Resultado Esperado")
           DESTINO=$(extrair "Repositório de destino" | head -n 1)
+
+          # Título base da 1ª linha da descrição (limitaremos a 7 palavras mais adiante)
           TITULO=$(printf "%s" "$DESCRICAO" | sed -n '1p' | sed 's/#\+//g; s/\r//g')
           [ -z "$TITULO" ] && TITULO="Bug report"
+
           {
             echo "descricao<<EOF";   echo "$DESCRICAO";   echo "EOF";
             echo "localizacao<<EOF"; echo "$LOCALIZACAO"; echo "EOF";
@@ -113,43 +116,33 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
-          bullets=$(sed 's/^/- /' precheck_errors.txt)
-          read -r -d '' BODY <<'TXT'
-A solicitação não foi aprovada pela validação automática.
-
-**Motivos:**
-__MOTIVOS__
-
-**Sugestões:**
-__SUG__
-
-Reveja e reabra com as correções.
-TXT
-
-          # Sugestões curtas com base nos motivos
-          SUG=""
-          while IFS= read -r m; do
-            case "$m" in
-              *'ultrapassa 450'* ) SUG+=$'- Reduza as respostas para no máximo 450 caracteres.\n' ;;
-              *'no máximo 2 frases'* ) SUG+=$'- Reescreva a descrição em até 2 frases com contexto (como/quando ocorreu).\n' ;;
-              *'Localização obrigatória'* ) SUG+=$'- Informe o caminho/tela. Ex.: Tela principal > Tabuleiro.\n' ;;
-              *'Passos para Reprodução'* ) SUG+=$'- Liste pelo menos 2 passos numerados (1), 2), ...).\n' ;;
-              *'Evidências devem'* ) SUG+=$'- Inclua ao menos 1 link de print/vídeo ou anexe um arquivo.\n' ;;
-              *'Resultado esperado está genérico'* ) SUG+=$'- Descreva o comportamento correto verificável (ex.: “limpar células e resetar o contador”).\n' ;;
-              *'dado sensível'* ) SUG+=$'- Remova chaves/senhas/segredos e substitua por <redigido>.\n' ;;
-              * ) SUG+=$"- $m\n" ;;
-            esac
-          done < precheck_errors.txt
-
-          BODY=${BODY/__MOTIVOS__/$bullets}
-          BODY=${BODY/__SUG__/$SUG}
+          {
+            echo "A solicitação não foi aprovada pela validação automática."
+            echo
+            echo "**Motivos:**"
+            sed 's/^/- /' precheck_errors.txt
+            echo
+            echo "**Sugestões:**"
+            while IFS= read -r m; do
+              case "$m" in
+                *"ultrapassa 450"* ) echo "- Reduza as respostas para no máximo 450 caracteres." ;;
+                *"no máximo 2 frases"* ) echo "- Reescreva a descrição em até 2 frases com contexto (como/quando ocorreu)." ;;
+                *"Localização obrigatória"* ) echo "- Informe o caminho/tela. Ex.: Tela principal > Tabuleiro." ;;
+                *"Passos para Reprodução"* ) echo "- Liste pelo menos 2 passos numerados (1), 2), ...)." ;;
+                *"Evidências devem"* ) echo "- Inclua ao menos 1 link de print/vídeo ou anexe um arquivo." ;;
+                *"Resultado esperado está genérico"* ) echo "- Descreva o comportamento correto verificável (ex.: “limpar células e resetar o contador”)." ;;
+                *"dado sensível"* ) echo "- Remova chaves/senhas/segredos e substitua por <redigido>." ;;
+                * ) echo "- $m" ;;
+              esac
+            done < precheck_errors.txt
+            echo
+            echo "Reveja e reabra com as correções."
+          } > body.txt
 
           OWNER=$(echo "$GITHUB_REPOSITORY" | cut -d/ -f1)
           REPO=$(echo "$GITHUB_REPOSITORY" | cut -d/ -f2)
           NUM=${{ github.event.issue.number }}
-
-          gh api repos/$OWNER/$REPO/issues/$NUM/comments -f body="$BODY"
-          gh api repos/$OWNER/$REPO -X PATCH -f default_branch="$(gh repo view --json defaultBranchRef -q .defaultBranchRef.name)" >/dev/null 2>&1 || true
+          gh api repos/$OWNER/$REPO/issues/$NUM/comments -f body="$(cat body.txt)"
           gh api repos/$OWNER/$REPO/issues/$NUM -X PATCH -f state="closed"
 
       # ===================== GEMINI 2.5 FLASH =====================
@@ -158,77 +151,77 @@ TXT
         if: steps.precheck.outputs.found_errors == 'false'
         env:
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          GEMINI_MODEL: ${{ env.GEMINI_MODEL }}
         run: |
-          SCHEMA=$(cat <<'JSON'
-          {
-            "type": "OBJECT",
-            "properties": {
-              "aprovado": { "type": "BOOLEAN" },
-              "escalar":  { "type": "BOOLEAN" },
-              "score":    { "type": "NUMBER" },
-              "motivos":  { "type": "ARRAY", "items": { "type": "STRING" } },
-              "sugestoes":{ "type": "ARRAY", "items": { "type": "STRING" } },
-              "titulo_corrigido": { "type": "STRING" }
-            },
-            "required": ["aprovado","escalar","motivos"]
-          }
-          JSON
-          )
+          # Grava system, user e schema em arquivos simples (evita quoting estranho no YAML)
+          cat > sys.txt <<'SYS'
+Você é um revisor de qualidade de bugs. Linguagem: Português (Brasil). Seja objetivo e claro.
+Aprove SOMENTE se TODAS as regras forem atendidas:
+- Título: até 7 palavras (conciso, preserva contexto).
+- Descrição: até 2 frases com contexto (como e quando).
+- Localização: tem ao menos 1 nível.
+- Passos: numerados, pelo menos 2 passos.
+- Evidências: contém ao menos 1 URL ou anexo.
+- Resultado: específico e verificável (não genérico).
+- Sem PII/segredos; se houver → escalar=true e reprove.
+O que você NÃO deve fazer: estimar esforço, priorizar, sugerir solução técnica ou culpados.
+Responda SOMENTE no schema JSON. Preencha "motivos" e "sugestoes" como bullets curtos e diretos.
+Se possível, proponha "titulo_corrigido" (<= 7 palavras).
+SYS
 
-          SYS=$(cat <<'TXT'
-          Você é um revisor de qualidade de bugs. Linguagem: Português (Brasil). Seja objetivo e claro.
-          Aprove SOMENTE se TODAS as regras forem atendidas:
-          - Título: até 7 palavras (conciso, preserva contexto).
-          - Descrição: até 2 frases com contexto (como e quando).
-          - Localização: tem ao menos 1 nível.
-          - Passos: numerados, pelo menos 2 passos.
-          - Evidências: contém ao menos 1 URL ou anexo.
-          - Resultado: específico e verificável (não genérico).
-          - Sem PII/segredos; se houver → escalar=true e reprove.
-          O que você NÃO deve fazer: estimar esforço, priorizar, sugerir solução técnica ou culpados.
-          Responda SOMENTE no schema JSON. Preencha "motivos" e "sugestoes" como bullets curtos e diretos.
-          Se possível, proponha "titulo_corrigido" (<= 7 palavras).
-          TXT
-          )
+          cat > user.txt <<'USR'
+Descrição do Bug:
+${{ steps.parse.outputs.descricao }}
 
-          USER=$(cat <<'TXT'
-          Descrição do Bug:
-          ${{ steps.parse.outputs.descricao }}
+Localização:
+${{ steps.parse.outputs.localizacao }}
 
-          Localização:
-          ${{ steps.parse.outputs.localizacao }}
+Passos para Reprodução:
+${{ steps.parse.outputs.passos }}
 
-          Passos para Reprodução:
-          ${{ steps.parse.outputs.passos }}
+Evidências:
+${{ steps.parse.outputs.evidencias }}
 
-          Evidências:
-          ${{ steps.parse.outputs.evidencias }}
+Resultado Esperado:
+${{ steps.parse.outputs.resultado }}
+USR
 
-          Resultado Esperado:
-          ${{ steps.parse.outputs.resultado }}
-          TXT
-          )
+          cat > schema.json <<'JSON'
+{
+  "type": "OBJECT",
+  "properties": {
+    "aprovado": { "type": "BOOLEAN" },
+    "escalar":  { "type": "BOOLEAN" },
+    "score":    { "type": "NUMBER" },
+    "motivos":  { "type": "ARRAY", "items": { "type": "STRING" } },
+    "sugestoes":{ "type": "ARRAY", "items": { "type": "STRING" } },
+    "titulo_corrigido": { "type": "STRING" }
+  },
+  "required": ["aprovado","escalar","motivos"]
+}
+JSON
 
-          PAYLOAD=$(jq -n \
-            --arg sys "$SYS" \
-            --arg user "$USER" \
-            --argjson schema "$SCHEMA" \
-            '{
-              system_instruction: { role: "system", parts: [ { text: $sys } ] },
-              contents: [ { role: "user", parts: [ { text: $user } ] } ],
-              generationConfig: {
-                response_mime_type: "application/json",
-                response_schema: $schema,
-                temperature: 0.1
-              }
-            }'
-          )
+          SYS=$(jq -Rs . < sys.txt)
+          USR=$(jq -Rs . < user.txt)
+          SCHEMA=$(cat schema.json)
+
+          # Monta payload com strings já escapadas
+          printf '{
+            "system_instruction": { "role": "system", "parts": [ { "text": %s } ] },
+            "contents": [ { "role": "user", "parts": [ { "text": %s } ] } ],
+            "generationConfig": {
+              "response_mime_type": "application/json",
+              "response_schema": %s,
+              "temperature": 0.1
+            }
+          }' "$SYS" "$USR" "$SCHEMA" > payload.json
 
           HTTP=$(curl -sS -w "%{http_code}" -o resp.json \
-            -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent" \
+            -X POST "https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent" \
             -H "Content-Type: application/json" \
             -H "x-goog-api-key: $GOOGLE_API_KEY" \
-            -d "$PAYLOAD")
+            --data-binary @payload.json)
+
           echo "HTTP status: $HTTP"
           if [ "$HTTP" -lt 200 ] || [ "$HTTP" -ge 300 ]; then echo "Erro:"; cat resp.json; exit 1; fi
 
@@ -240,7 +233,6 @@ TXT
           ESCALAR=$(jq -r '.escalar' gemini.json)
           TITULO_CORRIGIDO=$(jq -r '.titulo_corrigido // empty' gemini.json)
           if [ "$ESCALAR" = "true" ]; then APROVADO=false; fi
-
           echo "aprovado=$APROVADO" >> $GITHUB_OUTPUT
           echo "titulo_ok=$TITULO_CORRIGIDO" >> $GITHUB_OUTPUT
 
@@ -254,14 +246,32 @@ TXT
         run: |
           RAW="${{ steps.gemini.outputs.titulo_ok }}"
           [ -z "$RAW" ] || [ "$RAW" = "null" ] && RAW="$(printf "%s" "${{ steps.parse.outputs.titulo }}")"
-          # Limita a 7 palavras
+          # 7 palavras no máximo
           TITLE=$(printf "%s\n" "$RAW" | awk '{ n=7; for(i=1;i<=NF && i<=n;i++) printf("%s%s",$i,(i==n||i==NF)?"":" "); print "" }')
 
-          BODY="**Descrição do Bug**:\n${{ steps.parse.outputs.descricao }}\n\n**Localização**:\n${{ steps.parse.outputs.localizacao }}\n\n**Passos para Reprodução**:\n${{ steps.parse.outputs.passos }}\n\n**Evidências**:\n${{ steps.parse.outputs.evidencias }}\n\n**Resultado Esperado**:\n${{ steps.parse.outputs.resultado }}\n\n_Criada automaticamente após aprovação (Gemini 2.5 Flash)._"
+          {
+            echo "**Descrição do Bug:**"
+            echo "${{ steps.parse.outputs.descricao }}"
+            echo
+            echo "**Localização:**"
+            echo "${{ steps.parse.outputs.localizacao }}"
+            echo
+            echo "**Passos para Reprodução:**"
+            echo "${{ steps.parse.outputs.passos }}"
+            echo
+            echo "**Evidências:**"
+            echo "${{ steps.parse.outputs.evidencias }}"
+            echo
+            echo "**Resultado Esperado:**"
+            echo "${{ steps.parse.outputs.resultado }}"
+            echo
+            echo "_Criada automaticamente após aprovação (Gemini 2.5 Flash)._"
+          } > body.txt
 
           OWNER=${DEST%%/*}
           REPO=${DEST#*/}
-          RESP=$(gh api repos/$OWNER/$REPO/issues -f title="$TITLE" -f body="$BODY")
+
+          RESP=$(gh api repos/$OWNER/$REPO/issues -f title="$TITLE" -f body="$(cat body.txt)")
           echo "$RESP" | jq -r '.html_url' > created_url.txt
           echo "url=$(cat created_url.txt)" >> $GITHUB_OUTPUT
 
@@ -274,7 +284,10 @@ TXT
           OWNER=$(echo "$GITHUB_REPOSITORY" | cut -d/ -f1)
           REPO=$(echo "$GITHUB_REPOSITORY" | cut -d/ -f2)
           NUM=${{ github.event.issue.number }}
-          gh api repos/$OWNER/$REPO/issues/$NUM/comments -f body="✅ **Aprovada** e criada no destino:\n${url}\n\nFechando esta solicitação."
+          gh api repos/$OWNER/$REPO/issues/$NUM/comments -f body="✅ **Aprovada** e criada no destino:
+${url}
+
+Fechando esta solicitação."
           gh api repos/$OWNER/$REPO/issues/$NUM -X PATCH -f state="closed"
 
       # ===================== REPROVAÇÃO (pós-Gemini) =====================
@@ -283,25 +296,23 @@ TXT
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
-          jq -r '.motivos[]' gemini.json | sed 's/^/- /' > motivos.txt || echo "- Não informado." > motivos.txt
-          jq -r '.sugestoes[]' gemini.json | sed 's/^/- /' > sugestoes.txt || echo "- Ajuste os campos obrigatórios conforme os motivos." > sugestoes.txt
-          BODY=$(cat <<'TXT'
-A solicitação não foi aprovada pela validação automática.
+          jq -r '.motivos[]' gemini.json 2>/dev/null | sed 's/^/- /' > motivos.txt || echo "- Não informado." > motivos.txt
+          jq -r '.sugestoes[]' gemini.json 2>/dev/null | sed 's/^/- /' > sugestoes.txt || echo "- Ajuste os campos obrigatórios conforme os motivos." > sugestoes.txt
 
-**Motivos:**
-__MOTIVOS__
-
-**Sugestões:**
-__SUG__
-
-Reveja e reabra com as correções.
-TXT
-)
-          BODY=${BODY/__MOTIVOS__/$(cat motivos.txt)}
-          BODY=${BODY/__SUG__/$(cat sugestoes.txt)}
+          {
+            echo "A solicitação não foi aprovada pela validação automática."
+            echo
+            echo "**Motivos:**"
+            cat motivos.txt
+            echo
+            echo "**Sugestões:**"
+            cat sugestoes.txt
+            echo
+            echo "Reveja e reabra com as correções."
+          } > body.txt
 
           OWNER=$(echo "$GITHUB_REPOSITORY" | cut -d/ -f1)
           REPO=$(echo "$GITHUB_REPOSITORY" | cut -d/ -f2)
           NUM=${{ github.event.issue.number }}
-          gh api repos/$OWNER/$REPO/issues/$NUM/comments -f body="$BODY"
+          gh api repos/$OWNER/$REPO/issues/$NUM/comments -f body="$(cat body.txt)"
           gh api repos/$OWNER/$REPO/issues/$NUM -X PATCH -f state="closed"
