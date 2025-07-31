@@ -2,7 +2,7 @@ name: Validar solicitação com Gemini 2.5 Flash e criar issue
 
 on:
   projects_v2_item:
-    types: [edited]   # dispara quando um item de Project v2 é editado (p.ex., muda Status)
+    types: [edited]  # dispara quando um item do Project v2 é editado
 
 concurrency:
   group: intake-${{ github.event.projects_v2_item.node_id }}
@@ -11,7 +11,7 @@ concurrency:
 permissions:
   issues: write
   contents: read
-  projects: write   # necessário para ler/atualizar campos do Project v2
+  projects: write  # necessário para atualizar o campo Status do Project v2
 
 jobs:
   gatekeep:
@@ -20,19 +20,22 @@ jobs:
       GEMINI_MODEL: gemini-2.5-flash
 
     steps:
-      - name: Debug do evento (Projects v2 item)
+      - name: Debug do evento (Projects v2)
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           echo "action: ${{ github.event.action }}"
           echo "item.node_id: ${{ github.event.projects_v2_item.node_id }}"
           echo "project_node_id: ${{ github.event.projects_v2_item.project_node_id }}"
 
-      # Resolve item -> Issue vinculada, Projeto e Status atual
-      - name: Carregar item do projeto (issue, projeto, status)
+      - name: Carregar item (issue, projeto, status)
         id: item
         env:
+          GH_TOKEN: ${{ github.token }}
           ITEM_NODE: ${{ github.event.projects_v2_item.node_id }}
         run: |
           set -e
+
           gh api graphql -f query='
             query($id:ID!){
               node(id:$id){
@@ -74,7 +77,6 @@ jobs:
           echo "Status:  $STATUS_NAME"
           echo "Issue:   $ISSUE_REPO #$ISSUE_NUM"
 
-          # Só seguimos se for o projeto correto e status Triage
           if [ "$PROJ_TITLE" != "projeto-teste" ] || [ "$STATUS_NAME" != "Triage" ]; then
             echo "proceed=false" >> $GITHUB_OUTPUT
             exit 0
@@ -89,7 +91,6 @@ jobs:
             echo "issue_num=$ISSUE_NUM"
           } >> $GITHUB_OUTPUT
 
-          # Passa o body da issue para os próximos passos
           printf "%s" "$ISSUE_BODY" > issue_body.md
 
       - name: Extrair campos do formulário
@@ -126,7 +127,7 @@ jobs:
             echo "titulo=$TITULO";
           } >> $GITHUB_OUTPUT
 
-      # ===================== PRÉ-VALIDAÇÃO (regras objetivas) =====================
+      # =============== PRÉ-VALIDAÇÃO (regras objetivas) ===============
       - name: Pré-validação determinística
         id: precheck
         if: steps.item.outputs.proceed == 'true'
@@ -204,6 +205,7 @@ jobs:
         id: gemini
         if: steps.item.outputs.proceed == 'true' && steps.precheck.outputs.found_errors == 'false'
         env:
+          GH_TOKEN: ${{ github.token }}
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
           GEMINI_MODEL: ${{ env.GEMINI_MODEL }}
         run: |
@@ -216,8 +218,8 @@ jobs:
           - Evidências: contém ao menos 1 URL ou anexo.
           - Resultado: específico e verificável (não genérico).
           - Sem PII/segredos; se houver -> escalar=true e reprove.
-          O que você NAO deve fazer: estimar esforço, priorizar, sugerir solução técnica ou culpados.
-          Responda SOMENTE no schema JSON. Preencha "motivos" e "sugestoes" como bullets curtos e diretos.
+          Não estimar esforço, nem priorizar, nem sugerir solução técnica.
+          Responda SOMENTE no schema JSON. Campos "motivos" e "sugestoes" em bullets curtos.
           Se possível, proponha "titulo_corrigido" (<= 7 palavras).'
 
           USER=$'Descrição do Bug:\n'"${{ steps.parse.outputs.descricao }}"$'\n\nLocalização:\n'"${{ steps.parse.outputs.localizacao }}"$'\n\nPassos para Reprodução:\n'"${{ steps.parse.outputs.passos }}"$'\n\nEvidências:\n'"${{ steps.parse.outputs.evidencias }}"$'\n\nResultado Esperado:\n'"${{ steps.parse.outputs.resultado }}"
@@ -273,7 +275,7 @@ jobs:
         if: steps.item.outputs.proceed == 'true' && steps.gemini.outputs.aprovado == 'true'
         id: create_issue
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT }}   # PAT só para criar no destino
+          GH_TOKEN: ${{ secrets.GH_PAT }}  # PAT apenas para criar no destino
           DEST: ${{ steps.parse.outputs.destino }}
         run: |
           RAW="${{ steps.gemini.outputs.titulo_ok }}"
@@ -305,10 +307,10 @@ jobs:
           echo "$RESP" | jq -r '.html_url' > created_url.txt
           echo "url=$(cat created_url.txt)" >> $GITHUB_OUTPUT
 
-      - name: Comentar link na issue e mover status para Backlog (projeto-teste)
+      - name: Comentar link e mover para Backlog (projeto-teste)
         if: steps.item.outputs.proceed == 'true' && steps.gemini.outputs.aprovado == 'true'
         env:
-          GH_TOKEN: ${{ github.token }}   # comentar e atualizar Project no intake
+          GH_TOKEN: ${{ github.token }}
           OWNER_REPO: ${{ steps.item.outputs.issue_repo }}
           NUM: ${{ steps.item.outputs.issue_num }}
           PROJECT_ID: ${{ steps.item.outputs.project_id }}
@@ -317,13 +319,11 @@ jobs:
         run: |
           url=$(cat created_url.txt)
 
-          # 1) Comenta o link na issue original (no repo de origem)
-          gh api repos/$OWNER_REPO/issues/$NUM/comments -f body="✅ **Aprovada**. Criada no destino:
+          gh api repos/$OWNER_REPO/issues/$NUM/comments -f body="Aprovada. Criada no destino:
 ${url}
 
-Movendo o item do projeto para **Backlog**."
+Movendo para Backlog no projeto."
 
-          # 2) Descobrir optionId de "Backlog" para o campo Status
           gh api graphql -f query='
             query($pid:ID!){
               node(id:$pid){
@@ -352,7 +352,6 @@ Movendo o item do projeto para **Backlog**."
             exit 1
           fi
 
-          # 3) Atualiza o Status do item para Backlog
           gh api graphql -f query='
             mutation($project:ID!, $item:ID!, $field:ID!, $opt:ID!){
               updateProjectV2ItemFieldValue(input:{
@@ -372,7 +371,7 @@ Movendo o item do projeto para **Backlog**."
           NUM: ${{ steps.item.outputs.issue_num }}
         run: |
           jq -r '.motivos[]' gemini.json 2>/dev/null | sed 's/^/- /' > motivos.txt || echo "- Não informado." > motivos.txt
-          jq -r '.sugestoes[]' gemini.json 2>/dev/null | sed 's/^/- /' > sugestoes.txt || echo "- Ajuste os campos obrigatórios conforme os motivos." > sugestoes.txt
+          jq -r '.sugestoes[]' gemini.json 2>/devnull | sed 's/^/- /' > sugestoes.txt || echo "- Ajuste os campos obrigatórios conforme os motivos." > sugestoes.txt
 
           {
             echo "A solicitação não foi aprovada pela validação automática."
