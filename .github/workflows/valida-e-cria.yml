@@ -1,8 +1,13 @@
-name: Validar solicitação com Gemini 2.0 Flash e criar issue
+name: Validar solicitação com Gemini 2.5 Flash e criar issue
 
 on:
   issues:
     types: [opened, labeled]
+
+# (Opcional) evita duplicação quando abrir + rotular quase ao mesmo tempo
+concurrency:
+  group: intake-${{ github.event.issue.node_id }}
+  cancel-in-progress: true
 
 permissions:
   issues: write
@@ -11,9 +16,14 @@ permissions:
 jobs:
   gatekeep:
     runs-on: ubuntu-latest
+    # só roda se a issue já veio com a label 'solicitacao'
+    # ou se o evento atual foi rotular com 'solicitacao'
     if: >
       contains(github.event.issue.labels.*.name, 'solicitacao') ||
       (github.event.action == 'labeled' && github.event.label.name == 'solicitacao')
+    env:
+      # 👇 modelo centralizado aqui; troque se necessário (ex.: gemini-2.5-flash-001)
+      GEMINI_MODEL: gemini-2.5-flash
 
     steps:
       - name: Debug do evento
@@ -30,6 +40,7 @@ jobs:
           BODY=$(printf "%s" "${{ github.event.issue.body }}")
 
           extrair() {
+            # Busca blocos estilo: "### <Label>\n<valor ... até próximo ###>"
             echo "$BODY" | awk -v header="### $1" '
               $0==header {flag=1; next}
               /^### / && flag {flag=0}
@@ -44,7 +55,8 @@ jobs:
           RESULTADO=$(extrair "Resultado Esperado")
           DESTINO=$(extrair "Repositório de destino" | head -n 1)
 
-          TITULO=$(printf "%s" "$DESCRICAO" | sed -n '1p' | sed 's/#\+//g; s/\r//g' | cut -c1-80)
+          # Título base: 1ª linha da descrição (será limitado a 7 palavras mais à frente)
+          TITULO=$(printf "%s" "$DESCRICAO" | sed -n '1p' | sed 's/#\+//g; s/\r//g')
           if [ -z "$TITULO" ]; then TITULO="Bug report"; fi
 
           {
@@ -57,34 +69,140 @@ jobs:
             echo "titulo=$TITULO";
           } >> $GITHUB_OUTPUT
 
-      - name: Validar com Gemini 2.0 Flash (JSON estrito)
+      # ===================== PRÉ-VALIDAÇÃO (regras objetivas) =====================
+      - name: Pré-validação determinística
+        id: precheck
+        run: |
+          fail() { echo "$1" >> precheck_errors.txt; }
+
+          DESC="${{ steps.parse.outputs.descricao }}"
+          LOC="${{ steps.parse.outputs.localizacao }}"
+          PASS="${{ steps.parse.outputs.passos }}"
+          EVID="${{ steps.parse.outputs.evidencias }}"
+          RES="${{ steps.parse.outputs.resultado }}"
+
+          # 0) Tamanho total (todas as respostas) ≤ 450 caracteres
+          TOTLEN=$(printf "%s%s%s%s%s" "$DESC" "$LOC" "$PASS" "$EVID" "$RES" | wc -c)
+          [ "$TOTLEN" -gt 450 ] && fail "Texto total ultrapassa 450 caracteres (atual: ${TOTLEN})."
+
+          # 1) Descrição: no máximo 2 frases (conta . ! ?)
+          SENT=$(printf "%s" "$DESC" | tr '\n' ' ' | grep -oE '[.!?]' | wc -l || true)
+          [ "$SENT" -gt 2 ] && fail "Descrição do Bug deve ter no máximo 2 frases com contexto (como/quando)."
+
+          # 2) Localização: pelo menos 1 nível (não vazia)
+          [ -z "$(printf "%s" "$LOC" | tr -d '[:space:]')" ] && \
+            fail "Localização obrigatória; informe o caminho/tela (ex.: Tela principal > Tabuleiro)."
+
+          # 3) Passos: numerados e no mínimo 2
+          CNT=$(printf "%s" "$PASS" | grep -E '^[[:space:]]*[0-9]+[.)]' | wc -l || true)
+          [ "$CNT" -lt 2 ] && fail "Passos para Reprodução devem ser numerados (1), 2), ...) e ter no mínimo 2 passos."
+
+          # 4) Evidências: pelo menos 1 URL ou anexo (markdown imagem/arquivo)
+          printf "%s" "$EVID" | grep -Eiq '!\[[^]]*\]\(|https?://|\.png|\.jpg|\.jpeg|\.gif|\.mp4|\.mov' || \
+            fail "Evidências devem conter ao menos 1 URL (print/vídeo) ou arquivo anexado."
+
+          # 5) Resultado: rejeitar genéricos
+          printf "%s" "$RES" | grep -Eiq 'funcion(a|e) corretamente|sem erro(s)?|deveria funcionar|ok' && \
+            fail "Resultado esperado está genérico; descreva comportamento específico e verificável."
+
+          # 6) PII/segredos (heurística simples)
+          printf "%s %s %s" "$DESC" "$EVID" "$PASS" | \
+          grep -Eiq '(AKIA[0-9A-Z]{16}|-----BEGIN (RSA|OPENSSH) PRIVATE KEY-----|password=|secret=|x-api-key|token=|Authorization: Bearer)' && {
+            echo "escalar=true" >> $GITHUB_OUTPUT
+            fail "Possível dado sensível detectado (chaves/senhas/segredos); remova ou redija."
+          }
+
+          if [ -f precheck_errors.txt ]; then
+            echo "found_errors=true" >> $GITHUB_OUTPUT
+          else
+            echo "found_errors=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Reprovar por pré-validação
+        if: steps.precheck.outputs.found_errors == 'true'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GH_PAT }}
+          script: |
+            const fs = require('fs')
+            const raw = fs.readFileSync('precheck_errors.txt','utf8')
+            const motivos = raw.split('\n').filter(Boolean)
+
+            // Sugestões curtas e específicas
+            const sug = motivos.map(m => {
+              if (m.includes('Texto total ultrapassa')) return '- Reduza as respostas para no máximo 450 caracteres.'
+              if (m.includes('no máximo 2 frases')) return '- Reescreva a descrição em até 2 frases com contexto (como/quando ocorreu).'
+              if (m.includes('Localização obrigatória')) return '- Informe o caminho/tela. Ex.: Tela principal > Tabuleiro.'
+              if (m.includes('Passos para Reprodução')) return '- Liste pelo menos 2 passos numerados (1), 2), ...).'
+              if (m.includes('Evidências devem')) return '- Inclua ao menos 1 link de print/vídeo ou anexe um arquivo.'
+              if (m.includes('Resultado esperado está genérico')) return '- Descreva o comportamento correto verificável (ex.: “limpar células e resetar o contador”).'
+              if (m.includes('Possível dado sensível')) return '- Remova chaves/senhas/segredos e substitua por <redigido>.'
+              return `- ${m}`
+            })
+
+            const bullets = motivos.map(x => `- ${x}`).join('\n')
+            const sugestoes = sug.join('\n')
+            const body =
+`A solicitação não foi aprovada pela validação automática.
+
+**Motivos:**
+${bullets}
+
+**Sugestões:**
+${sugestoes}
+
+Reveja e reabra com as correções.`
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body
+            })
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              state: 'closed'
+            })
+
+      # ======================== VALIDAÇÃO COM GEMINI 2.5 =========================
+      - name: Validar com Gemini 2.5 Flash (JSON estrito)
         id: gemini
+        if: steps.precheck.outputs.found_errors == 'false'
         env:
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          GEMINI_MODEL: ${{ env.GEMINI_MODEL }}
         run: |
           SCHEMA=$(cat <<'JSON'
           {
             "type": "OBJECT",
             "properties": {
               "aprovado": { "type": "BOOLEAN" },
+              "escalar":  { "type": "BOOLEAN" },
+              "score":    { "type": "NUMBER" },
               "motivos":  { "type": "ARRAY", "items": { "type": "STRING" } },
-              "titulo_corrigido": { "type": "STRING" },
-              "observacoes": { "type": "STRING" }
+              "sugestoes":{ "type": "ARRAY", "items": { "type": "STRING" } },
+              "titulo_corrigido": { "type": "STRING" }
             },
-            "required": ["aprovado", "motivos"]
+            "required": ["aprovado","escalar","motivos"]
           }
           JSON
           )
 
           SYS=$(cat <<'TXT'
-          Você é um revisor de qualidade de bugs.
-          Aprove apenas se TODOS os campos obrigatórios estiverem informativos:
-          - Descrição do Bug (contexto/impacto)
-          - Localização (caminho/tela)
-          - Passos para Reprodução (passo a passo claro)
-          - Evidências (link de print/vídeo)
-          - Resultado Esperado (comportamento correto)
-          Responda SOMENTE no schema JSON definido.
+          Você é um revisor de qualidade de bugs. Linguagem: Português (Brasil). Seja objetivo e claro.
+          Aprove SOMENTE se TODAS as regras forem atendidas:
+          - Título: até 7 palavras (conciso, preserva contexto).
+          - Descrição: até 2 frases com contexto (como e quando).
+          - Localização: tem ao menos 1 nível.
+          - Passos: numerados, pelo menos 2 passos.
+          - Evidências: contém ao menos 1 URL ou anexo.
+          - Resultado: específico e verificável (não genérico).
+          - Sem PII/segredos; se houver → escalar=true e reprove.
+          O que você NÃO deve fazer: estimar esforço, priorizar, sugerir solução técnica ou culpados.
+          Responda SOMENTE no schema JSON. Preencha "motivos" e "sugestoes" como bullets curtos e diretos.
+          Se possível, proponha "titulo_corrigido" (<= 7 palavras).
           TXT
           )
 
@@ -116,43 +234,33 @@ jobs:
               generationConfig: {
                 response_mime_type: "application/json",
                 response_schema: $schema,
-                temperature: 0.2
+                temperature: 0.1
               }
             }'
           )
 
           HTTP=$(curl -sS -w "%{http_code}" -o resp.json \
-            -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent" \
+            -X POST "https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent" \
             -H "Content-Type: application/json" \
             -H "x-goog-api-key: $GOOGLE_API_KEY" \
             -d "$PAYLOAD")
 
           echo "HTTP status: $HTTP"
-          if [ "$HTTP" -lt 200 ] || [ "$HTTP" -ge 300 ]; then
-            echo "Resposta da API (erro):"
-            cat resp.json
-            exit 1
-          fi
+          if [ "$HTTP" -lt 200 ] || [ "$HTTP" -ge 300 ]; then echo "Erro:"; cat resp.json; exit 1; fi
 
           TEXT=$(jq -r '.candidates[0].content.parts[0].text // empty' resp.json)
-          if [ -z "$TEXT" ]; then
-            echo "Resposta sem conteúdo de texto esperado:"
-            cat resp.json
-            exit 1
-          fi
-
-          echo "$TEXT" | jq . > gemini.json || {
-            echo "O modelo não retornou JSON válido:"
-            echo "$TEXT"
-            exit 1
-          }
+          [ -z "$TEXT" ] && { echo "Sem texto"; cat resp.json; exit 1; }
+          echo "$TEXT" | jq . > gemini.json || { echo "$TEXT"; exit 1; }
 
           APROVADO=$(jq -r '.aprovado' gemini.json)
-          TITULO_CORRIGIDO=$(jq -r '.titulo_corrigido' gemini.json)
+          ESCALAR=$(jq -r '.escalar' gemini.json)
+          TITULO_CORRIGIDO=$(jq -r '.titulo_corrigido // empty' gemini.json)
 
+          if [ "$ESCALAR" = "true" ]; then APROVADO=false; fi
           echo "aprovado=$APROVADO" >> $GITHUB_OUTPUT
           echo "titulo_ok=$TITULO_CORRIGIDO" >> $GITHUB_OUTPUT
 
+      # ============================ APROVADO =============================
       - name: Criar issue no repositório de destino (se aprovado)
         if: steps.gemini.outputs.aprovado == 'true'
         id: create_issue
@@ -160,12 +268,15 @@ jobs:
           GH_TOKEN: ${{ secrets.GH_PAT }}
           DEST: ${{ steps.parse.outputs.destino }}
         run: |
-          TITLE="${{ steps.gemini.outputs.titulo_ok }}"
-          if [ -z "$TITLE" ] || [ "$TITLE" = "null" ]; then
-            TITLE="${{ steps.parse.outputs.titulo }}"
+          # 1) Título vindo do Gemini ou da 1ª linha da descrição
+          RAW="${{ steps.gemini.outputs.titulo_ok }}"
+          if [ -z "$RAW" ] || [ "$RAW" = "null" ]; then
+            RAW="$(printf "%s" "${{ steps.parse.outputs.titulo }}")"
           fi
+          # 2) Limita a 7 palavras
+          TITLE=$(printf "%s\n" "$RAW" | awk '{ n=7; for(i=1;i<=NF && i<=n;i++) printf("%s%s",$i,(i==n||i==NF)?"":" "); print "" }')
 
-          BODY="**Descrição do Bug**:\n${{ steps.parse.outputs.descricao }}\n\n**Localização**:\n${{ steps.parse.outputs.localizacao }}\n\n**Passos para Reprodução**:\n${{ steps.parse.outputs.passos }}\n\n**Evidências**:\n${{ steps.parse.outputs.evidencias }}\n\n**Resultado Esperado**:\n${{ steps.parse.outputs.resultado }}\n\n_Criada automaticamente após aprovação (Gemini 2.0 Flash)._"
+          BODY="**Descrição do Bug**:\n${{ steps.parse.outputs.descricao }}\n\n**Localização**:\n${{ steps.parse.outputs.localizacao }}\n\n**Passos para Reprodução**:\n${{ steps.parse.outputs.passos }}\n\n**Evidências**:\n${{ steps.parse.outputs.evidencias }}\n\n**Resultado Esperado**:\n${{ steps.parse.outputs.resultado }}\n\n_Criada automaticamente após aprovação (Gemini 2.5 Flash)._"
 
           OWNER=${DEST%%/*}
           REPO=${DEST#*/}
@@ -178,6 +289,7 @@ jobs:
         if: steps.gemini.outputs.aprovado == 'true'
         uses: actions/github-script@v7
         with:
+          github-token: ${{ secrets.GH_PAT }}
           script: |
             const fs = require('fs')
             const url = fs.readFileSync('created_url.txt','utf8').trim()
@@ -195,16 +307,27 @@ jobs:
               state: 'closed'
             })
 
+      # ============================ REPROVADO ============================
       - name: Comentar e fechar solicitação (se reprovado)
-        if: steps.gemini.outputs.aprovado != 'true'
+        if: steps.precheck.outputs.found_errors == 'false' && steps.gemini.outputs.aprovado != 'true'
         uses: actions/github-script@v7
         with:
+          github-token: ${{ secrets.GH_PAT }}
           script: |
             const fs = require('fs')
             const j = JSON.parse(fs.readFileSync('gemini.json','utf8'))
-            const motivos = (j.motivos || []).map(m => `- ${m}`).join('\n')
-            const obs = j.observacoes ? `\n\n**Sugestões:**\n${j.observacoes}\n` : ''
-            const body = `A solicitação **não foi aprovada** pela validação automática.\n\n**Motivos:**\n${motivos}${obs}\n_Reveja e reabra com as correções._`
+            const motivos = (j.motivos || []).map(m => `- ${m}`).join('\n') || '- Não informado.'
+            const sugestoes = (j.sugestoes || []).map(s => `- ${s}`).join('\n') || '- Ajuste os campos obrigatórios conforme os motivos.'
+            const body =
+`A solicitação não foi aprovada pela validação automática.
+
+**Motivos:**
+${motivos}
+
+**Sugestões:**
+${sugestoes}
+
+Reveja e reabra com as correções.`
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
