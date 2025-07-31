@@ -203,6 +203,7 @@ jobs:
       - name: Comentar por pré-validação (não fecha)
         if: steps.precheck.outputs.found_errors == 'true'
         env:
+          GH_TOKEN: ${{ github.token }}
           OWNER_REPO: ${{ github.event.repository.full_name }}
           NUM: ${{ github.event.issue.number }}
         run: |
@@ -338,6 +339,7 @@ jobs:
       - name: Comentar link e mover para Backlog (no projeto)
         if: steps.gemini.outputs.aprovado == 'true'
         env:
+          GH_TOKEN: ${{ github.token }}
           OWNER_REPO: ${{ github.event.repository.full_name }}
           NUM: ${{ github.event.issue.number }}
           PROJECT_ID: ${{ steps.pitem.outputs.project_id }}
@@ -372,6 +374,7 @@ jobs:
       - name: Comentar (reprovado) — não fecha
         if: steps.precheck.outputs.found_errors == 'false' && steps.gemini.outputs.aprovado != 'true'
         env:
+          GH_TOKEN: ${{ github.token }}
           OWNER_REPO: ${{ github.event.repository.full_name }}
           NUM: ${{ github.event.issue.number }}
         run: |
