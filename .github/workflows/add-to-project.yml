@@ -68,8 +68,9 @@ jobs:
           [ -n "$STATUS_FIELD_ID" ] && [ -n "$TRIAGE_OPT" ] || { echo "Campo Status e/ou opção Triage não encontrados"; exit 1; }
 
           # 4) Seta Status = Triage para o item
+          #    >>>> ALTERAÇÃO: $opt agora é String! (não ID!)
           gh api graphql -f query='
-            mutation($project:ID!, $item:ID!, $field:ID!, $opt:ID!){
+            mutation($project:ID!, $item:ID!, $field:ID!, $opt:String!){
               updateProjectV2ItemFieldValue(input:{
                 projectId:$project,
                 itemId:$item,
