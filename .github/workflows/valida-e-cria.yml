@@ -304,46 +304,45 @@ jobs:
         if: steps.gemini.outputs.aprovado == 'true'
         id: create_issue
         env:
-          GH_TOKEN: ${{ secrets.GH.PAT }}
-          DEST: ${{ steps.parse.outputs.destino }}
+          GH_TOKEN: ${{ secrets.GH_PAT }} # PAT com acesso ao repo de destino
+          DEST_RAW: ${{ steps.parse.outputs.destino }}
         run: |
-          RAW="${{ steps.gemini.outputs.titulo_ok }}"
-          [ -z "$RAW" ] || [ "$RAW" = "null" ] && RAW="$(printf "%s" "${{ steps.parse.outputs.titulo }}")"
-          TITLE=$(printf "%s\n" "$RAW" | awk '{ n=7; for(i=1;i<=NF && i<=n;i++) printf("%s%s",$i,(i==n||i==NF)?"":" "); print "" }')
+          set -euo pipefail
 
-          DEST=$(printf "%s" "$DEST_RAW" | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-          OWNER=${DEST%%/*}
-          REPO=${DEST#*/}
+          # 1) Monta título (<= 7 palavras)
+          RAW='${{ steps.gemini.outputs.titulo_ok }}'
+          if [ -z "$RAW" ] || [ "$RAW" = "null" ]; then
+            RAW='${{ steps.parse.outputs.titulo }}'
+          fi
+          TITLE="$(awk 'NF{c=0; for(i=1;i<=NF && c<7;i++){printf "%s%s",$i,(i==NF||c==6)?"":" "; c++}}END{print ""}' <<< "$RAW")"
 
+          # 2) Limpa DEST (remove \r e espaços)
+          DEST="$(printf "%s" "$DEST_RAW" | tr -d '\r' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+          OWNER="${DEST%%/*}"
+          REPO="${DEST#*/}"
           echo "Destino resolvido: OWNER='$OWNER' REPO='$REPO'"
 
+          # 3) Sanity check de acesso do token ao repo alvo
           gh api -X GET "repos/$OWNER/$REPO" -q .full_name >/dev/null || {
-          echo "O token não tem acesso a repos/$OWNER/$REPO (ou repo não existe)." >&2
-          exit 1
-        } 
+            echo "O token não tem acesso a repos/$OWNER/$REPO (ou o repo não existe)." >&2
+            exit 1
+          }
 
-            {
-          echo "**Descrição do Bug:**"
-          echo "${{ steps.parse.outputs.descricao }}"
-          echo
-          echo "**Localização:**"
-          echo "${{ steps.parse.outputs.localizacao }}"
-          echo
-          echo "**Passos para Reprodução:**"
-          echo "${{ steps.parse.outputs.passos }}"
-          echo
-          echo "**Evidências:**"
-          echo "${{ steps.parse.outputs.evidencias }}"
-          echo
-          echo "**Resultado Esperado:**"
-          echo "${{ steps.parse.outputs.resultado }}"
-          echo
-          echo "_Criada automaticamente após aprovação (Gemini 2.5 Flash)._"
-        } > body.txt
+          # 4) Corpo da issue
+          {
+            printf "**Descrição do Bug:**\n%s\n\n" '${{ steps.parse.outputs.descricao }}'
+            printf "**Localização:**\n%s\n\n"       '${{ steps.parse.outputs.localizacao }}'
+            printf "**Passos para Reprodução:**\n%s\n\n" '${{ steps.parse.outputs.passos }}'
+            printf "**Evidências:**\n%s\n\n"        '${{ steps.parse.outputs.evidencias }}'
+            printf "**Resultado Esperado:**\n%s\n\n" '${{ steps.parse.outputs.resultado }}'
+            printf "_Criada automaticamente após aprovação (Gemini 2.5 Flash)._"
+          } > body.txt
 
-          RESP=$(gh api "repos/$OWNER/$REPO/issues" -f title="$TITLE" -f body="$(cat body.txt)")
-          echo "$RESP" | jq -r '.html_url' > created_url.txt
-          echo "url=$(cat created_url.txt)" >> $GITHUB_OUTPUT
+          # 5) Cria a issue no destino
+          RESP="$(gh api "repos/$OWNER/$REPO/issues" -f title="$TITLE" -f body="$(cat body.txt)")"
+          jq -r '.html_url' <<< "$RESP" > created_url.txt
+          echo "url=$(cat created_url.txt)" >> "$GITHUB_OUTPUT"
+
       # 8) Aprovado: comenta e move para Backlog
       - name: Comentar link e mover para Backlog (no projeto)
         if: steps.gemini.outputs.aprovado == 'true'
