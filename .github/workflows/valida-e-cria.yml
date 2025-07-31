@@ -141,27 +141,29 @@ jobs:
           RESULTADO=$(extrair "Resultado Esperado")
 
           # Tenta extrair o destino por diferentes rótulos (fallbacks)
-          DESTINO=$(extrair "Repositório de destino" | head -n 1)
-          if [ -z "$DESTINO" ]; then DESTINO=$(extrair "Destino" | head -n 1); fi
-          if [ -z "$DESTINO" ]; then DESTINO=$(extrair "Target repository" | head -n 1); fi
-          if [ -z "$DESTINO" ]; then DESTINO=$(extrair "Repositório" | head -n 1); fi
+          extrair_nn() {
+            # pega a seção "### <label>" e retorna a 1ª linha não-vazia
+            extrair "$1" | awk 'NF{print; exit}'
+          }
 
-          TITULO=$(printf "%s" "$DESCRICAO" | sed -n '1p' | sed 's/#\+//g; s/\r//g')
-          [ -z "$TITULO" ] && TITULO="Bug report"
+          # Também tenta padrão "**<label>**" (negrito), muito comum em issue forms
+          extrair_bold() {
+            awk -v lbl="$1" '
+              BEGIN{ pat="^\\*\\*"?lbl"?\\*\\*$" }
+              $0 ~ pat {getline; while ($0 ~ /^$/) { if (!getline) exit }; if ($0 !~ /^$/) { print; exit } }
+            ' <<< "$BODY" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//'
+          }
 
-          {
-            echo "descricao<<EOF";   echo "$DESCRICAO";   echo "EOF";
-            echo "localizacao<<EOF"; echo "$LOCALIZACAO"; echo "EOF";
-            echo "passos<<EOF";      echo "$PASSOS";      echo "EOF";
-            echo "evidencias<<EOF";  echo "$EVIDENCIAS";  echo "EOF";
-            echo "resultado<<EOF";   echo "$RESULTADO";   echo "EOF";
-            echo "destino=$DESTINO";
-            echo "titulo=$TITULO";
-          } >> $GITHUB_OUTPUT
+          DESTINO="$(extrair_nn "Repositório de destino")"
+          [ -z "$DESTINO" ] && DESTINO="$(extrair_nn "Destino")"
+          [ -z "$DESTINO" ] && DESTINO="$(extrair_nn "Target repository")"
+          [ -z "$DESTINO" ] && DESTINO="$(extrair_nn "Repositório")"
 
-          echo "::group::DEBUG parse"
-          echo "Destino extraído: '${DESTINO}'"
-          echo "::endgroup::"
+          # Fallback para forma em negrito
+          [ -z "$DESTINO" ] && DESTINO="$(extrair_bold "Repositório de destino")"
+          [ -z "$DESTINO" ] && DESTINO="$(extrair_bold "Destino")"
+          [ -z "$DESTINO" ] && DESTINO="$(extrair_bold "Target repository")"
+          [ -z "$DESTINO" ] && DESTINO="$(extrair_bold "Repositório")"
 
       # 4) Pré-validação determinística
       - name: Pré-validação determinística
@@ -210,6 +212,18 @@ jobs:
             echo "found_errors=true" >> $GITHUB_OUTPUT
           else
             echo "found_errors=false" >> $GITHUB_OUTPUT
+          fi
+
+          DEST="${{ steps.parse.outputs.destino }}"
+          # Aceita owner/repo, URL do GitHub ou apenas repo (assume owner do repo atual)
+          if [ -z "$(printf "%s" "$DEST" | tr -d '[:space:]')" ]; then
+            fail "Campo 'Repositório de destino' é obrigatório (formato: owner/repo, URL do GitHub ou apenas repo)."
+          else
+            CLEAN="$(printf "%s" "$DEST" | tr -d '\r' | sed -E 's#^https?://github\.com/##; s#/$##; s/^[[:space:]]+//; s/[[:space:]]+$//')"
+            # Se for "repo" sem owner, deixamos passar e normalizamos mais tarde
+            if ! grep -Eq '^[[:alnum:]_.-]+(/[[:alnum:]_.-]+)?$' <<< "$CLEAN" ; then
+              fail "Repositório de destino inválido; use 'owner/repo' ou link do GitHub."
+            fi
           fi
 
       # 5) Reprovar por pré-validação (não fecha)
@@ -322,18 +336,38 @@ jobs:
         run: |
           set -euo pipefail
 
-          # 1) Monta título (<= 7 palavras)
-          RAW='${{ steps.gemini.outputs.titulo_ok }}'
-          if [ -z "$RAW" ] || [ "$RAW" = "null" ]; then
-            RAW='${{ steps.parse.outputs.titulo }}'
+          # 0) Guarda e valida o destino — evita OWNER/REPO vazios
+          RAW_DEST="${{ steps.parse.outputs.destino }}"
+          if [ -z "${RAW_DEST//[[:space:]]/}" ]; then
+            echo "Destino vazio — não dá para criar a issue no repo alvo." >&2
+            exit 0 # sai sem erro; o comentário de reprovação já foi feito na pré-validação
           fi
-          TITLE="$(awk 'NF{c=0; for(i=1;i<=NF && c<7;i++){printf "%s%s",$i,(i==NF||c==6)?"":" "; c++}}END{print ""}' <<< "$RAW")"
 
-          # 2) Limpa DEST (remove \r e espaços)
-          DEST="$(printf "%s" "$DEST_RAW" | tr -d '\r' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
-          OWNER="${DEST%%/*}"
-          REPO="${DEST#*/}"
+          # 1) Normaliza: aceita URL do GitHub, 'owner/repo' ou só 'repo'
+          RAW="$(printf "%s" "$RAW_DEST" | tr -d '\r' | sed -E 's#^https?://github\.com/##; s#/$##; s/^[[:space:]]+//; s/[[:space:]]+$//')"
+
+          if [[ "$RAW" == */* ]]; then
+            OWNER="${RAW%%/*}"
+            REPO="${RAW#*/}"
+          else
+            # só repo: usa o owner do repositório atual do workflow
+            OWNER="${GITHUB_REPOSITORY%%/*}"
+            REPO="$RAW"
+          fi
+
+          # sanity de caracteres
+          if ! [[ "$OWNER" =~ ^[A-Za-z0-9_.-]+$ && "$REPO" =~ ^[A-Za-z0-9_.-]+$ ]]; then
+            echo "Destino inválido após normalização: '$OWNER/$REPO'." >&2
+            exit 0
+          fi
+
           echo "Destino resolvido: OWNER='$OWNER' REPO='$REPO'"
+
+          # 2) Sanity check de acesso do PAT ao repo alvo (precisa 'repo' ou perm equivalente)
+          gh api -X GET "repos/$OWNER/$REPO" -q .full_name >/dev/null || {
+            echo "O token não tem acesso a repos/$OWNER/$REPO (ou o repo não existe)." >&2
+            exit 1
+          }
 
           # 3) Sanity check de acesso do token ao repo alvo
           gh api -X GET "repos/$OWNER/$REPO" -q .full_name >/dev/null || {
