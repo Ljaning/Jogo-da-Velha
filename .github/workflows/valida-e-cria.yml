@@ -164,7 +164,7 @@ jobs:
 
           # Limite total
           TOTLEN=$(printf "%s%s%s%s%s" "$DESC" "$LOC" "$PASS" "$EVID" "$RES" | wc -c)
-          [ "$TOTLEN" -gt 450 ] && fail "Texto total ultrapassa 450 caracteres (atual: ${TOTLEN})."
+          [ "$TOTLEN" -gt 800 ] && fail "Texto total ultrapassa 800 caracteres (atual: ${TOTLEN})."
 
           # Descrição: no máximo 2 frases
           SENT=$(printf "%s" "$DESC" | tr '\n' ' ' | grep -oE '[.!?]' | wc -l || true)
@@ -216,7 +216,7 @@ jobs:
             echo "**Sugestões:**"
             while IFS= read -r m; do
               case "$m" in
-                *"ultrapassa 450"* ) echo "- Reduza as respostas para no máximo 450 caracteres." ;;
+                *"ultrapassa 800"* ) echo "- Reduza as respostas para no máximo 800 caracteres." ;;
                 *"no máximo 2 frases"* ) echo "- Reescreva a descrição em até 2 frases com contexto (como/quando ocorreu)." ;;
                 *"Localização obrigatória"* ) echo "- Informe o caminho/tela. Ex.: Tela principal > Tabuleiro." ;;
                 *"Passos para Reprodução"* ) echo "- Liste pelo menos 2 passos numerados (1), 2), ...)." ;;
@@ -240,7 +240,7 @@ jobs:
         run: |
           SYS='Você é um revisor de qualidade de bugs. Linguagem: Português (Brasil). Seja objetivo e claro.
           Aprove SOMENTE se TODAS as regras forem atendidas:
-          - Título: até 7 palavras (conciso, preserva contexto).
+          - Título: até 10 palavras (conciso, preserva contexto).
           - Descrição: até 2 frases com contexto (como e quando).
           - Localização: tem ao menos 1 nível.
           - Passos: numerados, pelo menos 2 passos.
@@ -249,7 +249,7 @@ jobs:
           - Sem PII/segredos; se houver -> escalar=true e reprove.
           Não estimar esforço, nem priorizar, nem sugerir solução técnica.
           Responda SOMENTE no schema JSON. Campos "motivos" e "sugestoes" em bullets curtos.
-          Se possível, proponha "titulo_corrigido" (<= 7 palavras).'
+          Se possível, proponha "titulo_corrigido" (<= 10 palavras).'
 
           USER=$'Descrição do Bug:\n'"${{ steps.parse.outputs.descricao }}"$'\n\nLocalização:\n'"${{ steps.parse.outputs.localizacao }}"$'\n\nPassos para Reprodução:\n'"${{ steps.parse.outputs.passos }}"$'\n\nEvidências:\n'"${{ steps.parse.outputs.evidencias }}"$'\n\nResultado Esperado:\n'"${{ steps.parse.outputs.resultado }}"
 
@@ -308,7 +308,7 @@ jobs:
         run: |
           RAW="${{ steps.gemini.outputs.titulo_ok }}"
           [ -z "$RAW" ] || [ "$RAW" = "null" ] && RAW="$(printf "%s" "${{ steps.parse.outputs.titulo }}")"
-          TITLE=$(printf "%s\n" "$RAW" | awk '{ n=7; for(i=1;i<=NF && i<=n;i++) printf("%s%s",$i,(i==n||i==NF)?"":" "); print "" }')
+          TITLE=$(printf "%s\n" "$RAW" | awk '{ n=10; for(i=1;i<=NF && i<=n;i++) printf("%s%s",$i,(i==n||i==NF)?"":" "); print "" }')
 
           {
             echo "**Descrição do Bug:**"
