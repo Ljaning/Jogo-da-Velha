@@ -1,103 +1,230 @@
-- name: Validar com Gemini 2.0 Flash (JSON estrito)
-  id: gemini
-  env:
-    GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
-  run: |
-    # 1) Defina o schema de saída (obriga o JSON) — sem usar read -d ''
-    SCHEMA=$(cat <<'JSON'
-    {
-      "type": "object",
-      "properties": {
-        "aprovado": { "type": "boolean" },
-        "motivos":  { "type": "array", "items": { "type": "string" } },
-        "titulo_corrigido": { "type": ["string", "null"] },
-        "observacoes": { "type": ["string", "null"] }
-      },
-      "required": ["aprovado", "motivos"],
-      "additionalProperties": false
-    }
-    JSON
-    )
+name: Validar solicitação com Gemini 2.0 Flash e criar issue
 
-    # 2) System instruction
-    SYS=$(cat <<'TXT'
-    Você é um revisor de qualidade de bugs.
-    Aprove apenas se T-O-D-O-S os campos obrigatórios estiverem informativos:
-    - Descrição do Bug (contexto/impacto)
-    - Localização (caminho/tela)
-    - Passos para Reprodução (passo a passo claro)
-    - Evidências (link de print/vídeo)
-    - Resultado Esperado (comportamento correto)
-    Responda SOMENTE no schema JSON definido.
-    TXT
-    )
+on:
+  issues:
+    types: [opened, labeled] # roda ao abrir e ao rotular
 
-    # 3) Prompt com os dados do formulário
-    USER=$(cat <<'TXT'
-    Descrição do Bug:
-    ${{ steps.parse.outputs.descricao }}
+permissions:
+  issues: write
+  contents: read
 
-    Localização:
-    ${{ steps.parse.outputs.localizacao }}
+jobs:
+  gatekeep:
+    runs-on: ubuntu-latest
+    # só executa se a issue já tem a label 'solicitacao' ao abrir
+    # ou se o evento atual é de rotular com 'solicitacao'
+    if: >
+      contains(github.event.issue.labels.*.name, 'solicitacao') ||
+      (github.event.action == 'labeled' && github.event.label.name == 'solicitacao')
 
-    Passos para Reprodução:
-    ${{ steps.parse.outputs.passos }}
+    steps:
+      - name: Debug do evento
+        run: |
+          echo "action: ${{ github.event.action }}"
+          echo "label (se for labeled): ${{ github.event.label.name }}"
+          echo "labels atuais: ${{ toJson(github.event.issue.labels) }}"
+          echo "body (início):"
+          echo "${{ github.event.issue.body }}" | head -n 40
 
-    Evidências:
-    ${{ steps.parse.outputs.evidencias }}
+      - name: Extrair campos do formulário (novos cabeçalhos)
+        id: parse
+        run: |
+          BODY=$(printf "%s" "${{ github.event.issue.body }}")
 
-    Resultado Esperado:
-    ${{ steps.parse.outputs.resultado }}
-    TXT
-    )
+          extrair() {
+            # Busca blocos estilo: "### <Label>\n<valor ... até próximo ###>"
+            echo "$BODY" | awk -v header="### $1" '
+              $0==header {flag=1; next}
+              /^### / && flag {flag=0}
+              flag {print}
+            ' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//'
+          }
 
-    # 4) Monta o payload do Gemini API
-    PAYLOAD=$(jq -n \
-      --arg sys "$SYS" \
-      --arg user "$USER" \
-      --argjson schema "$SCHEMA" \
-      '{
-        system_instruction: { text: $sys },
-        contents: [{ role: "user", parts: [{text: $user}]}],
-        generationConfig: {
-          response_mime_type: "application/json",
-          response_schema: $schema,
-          temperature: 0.2
-        }
-      }'
-    )
+          DESCRICAO=$(extrair "Descrição do Bug")
+          LOCALIZACAO=$(extrair "Localização")
+          PASSOS=$(extrair "Passos para Reprodução")
+          EVIDENCIAS=$(extrair "Evidências")
+          RESULTADO=$(extrair "Resultado Esperado")
+          DESTINO=$(extrair "Repositório de destino" | head -n 1)
 
-    # 5) Chama o endpoint e captura HTTP code para debug
-    HTTP=$(curl -sS -w "%{http_code}" -o resp.json \
-      -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent" \
-      -H "Content-Type: application/json" \
-      -H "x-goog-api-key: $GOOGLE_API_KEY" \
-      -d "$PAYLOAD")
+          # Título automático: 1ª linha da descrição (até 80 chars)
+          TITULO=$(printf "%s" "$DESCRICAO" | sed -n '1p' | sed 's/#\+//g; s/\r//g' | cut -c1-80)
+          if [ -z "$TITULO" ]; then TITULO="Bug report"; fi
 
-    echo "HTTP status: $HTTP"
-    if [ "$HTTP" -lt 200 ] || [ "$HTTP" -ge 300 ]; then
-      echo "Resposta da API (erro):"
-      cat resp.json
-      exit 1
-    fi
+          {
+            echo "descricao<<EOF";   echo "$DESCRICAO";   echo "EOF";
+            echo "localizacao<<EOF"; echo "$LOCALIZACAO"; echo "EOF";
+            echo "passos<<EOF";      echo "$PASSOS";      echo "EOF";
+            echo "evidencias<<EOF";  echo "$EVIDENCIAS";  echo "EOF";
+            echo "resultado<<EOF";   echo "$RESULTADO";   echo "EOF";
+            echo "destino=$DESTINO";
+            echo "titulo=$TITULO";
+          } >> $GITHUB_OUTPUT
 
-    # 6) Extrai o JSON retornado
-    TEXT=$(jq -r '.candidates[0].content.parts[0].text // empty' resp.json)
-    if [ -z "$TEXT" ]; then
-      echo "Resposta sem conteúdo de texto esperado:"
-      cat resp.json
-      exit 1
-    fi
+      - name: Validar com Gemini 2.0 Flash (JSON estrito)
+        id: gemini
+        env:
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+        run: |
+          # ---- 1) SCHEMA (sem 'read -d', para não falhar o step) ----
+          SCHEMA=$(cat <<'JSON'
+          {
+            "type": "object",
+            "properties": {
+              "aprovado": { "type": "boolean" },
+              "motivos":  { "type": "array", "items": { "type": "string" } },
+              "titulo_corrigido": { "type": ["string","null"] },
+              "observacoes": { "type": ["string","null"] }
+            },
+            "required": ["aprovado", "motivos"],
+            "additionalProperties": false
+          }
+          JSON
+          )
 
-    # Valida que é JSON válido
-    echo "$TEXT" | jq . > gemini.json || {
-      echo "O modelo não retornou JSON válido conforme schema:"
-      echo "$TEXT"
-      exit 1
-    }
+          # ---- 2) SYSTEM ----
+          SYS=$(cat <<'TXT'
+          Você é um revisor de qualidade de bugs.
+          Aprove apenas se TODOS os campos obrigatórios estiverem informativos:
+          - Descrição do Bug (contexto/impacto)
+          - Localização (caminho/tela)
+          - Passos para Reprodução (passo a passo claro)
+          - Evidências (link de print/vídeo)
+          - Resultado Esperado (comportamento correto)
+          Responda SOMENTE no schema JSON definido.
+          TXT
+          )
 
-    APROVADO=$(jq -r '.aprovado' gemini.json)
-    TITULO_CORRIGIDO=$(jq -r '.titulo_corrigido' gemini.json)
+          # ---- 3) USER (dados do formulário) ----
+          USER=$(cat <<'TXT'
+          Descrição do Bug:
+          ${{ steps.parse.outputs.descricao }}
 
-    echo "aprovado=$APROVADO" >> $GITHUB_OUTPUT
-    echo "titulo_ok=$TITULO_CORRIGIDO" >> $GITHUB_OUTPUT
+          Localização:
+          ${{ steps.parse.outputs.localizacao }}
+
+          Passos para Reprodução:
+          ${{ steps.parse.outputs.passos }}
+
+          Evidências:
+          ${{ steps.parse.outputs.evidencias }}
+
+          Resultado Esperado:
+          ${{ steps.parse.outputs.resultado }}
+          TXT
+          )
+
+          # ---- 4) Payload ----
+          PAYLOAD=$(jq -n \
+            --arg sys "$SYS" \
+            --arg user "$USER" \
+            --argjson schema "$SCHEMA" \
+            '{
+              system_instruction: { text: $sys },
+              contents: [{ role: "user", parts: [{text: $user}]}],
+              generationConfig: {
+                response_mime_type: "application/json",
+                response_schema: $schema,
+                temperature: 0.2
+              }
+            }'
+          )
+
+          # ---- 5) Chamada HTTP com status para debug ----
+          HTTP=$(curl -sS -w "%{http_code}" -o resp.json \
+            -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent" \
+            -H "Content-Type: application/json" \
+            -H "x-goog-api-key: $GOOGLE_API_KEY" \
+            -d "$PAYLOAD")
+
+          echo "HTTP status: $HTTP"
+          if [ "$HTTP" -lt 200 ] || [ "$HTTP" -ge 300 ]; then
+            echo "Resposta da API (erro):"
+            cat resp.json
+            exit 1
+          fi
+
+          # ---- 6) Extrair JSON do modelo ----
+          TEXT=$(jq -r '.candidates[0].content.parts[0].text // empty' resp.json)
+          if [ -z "$TEXT" ]; then
+            echo "Resposta sem conteúdo de texto esperado:"
+            cat resp.json
+            exit 1
+          fi
+
+          echo "$TEXT" | jq . > gemini.json || {
+            echo "O modelo não retornou JSON válido:"
+            echo "$TEXT"
+            exit 1
+          }
+
+          APROVADO=$(jq -r '.aprovado' gemini.json)
+          TITULO_CORRIGIDO=$(jq -r '.titulo_corrigido' gemini.json)
+
+          echo "aprovado=$APROVADO" >> $GITHUB_OUTPUT
+          echo "titulo_ok=$TITULO_CORRIGIDO" >> $GITHUB_OUTPUT
+
+      - name: Criar issue no repositório de destino (se aprovado)
+        if: steps.gemini.outputs.aprovado == 'true'
+        id: create_issue
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+          DEST: ${{ steps.parse.outputs.destino }}
+        run: |
+          TITLE="${{ steps.gemini.outputs.titulo_ok }}"
+          if [ -z "$TITLE" ] || [ "$TITLE" = "null" ]; then
+            TITLE="${{ steps.parse.outputs.titulo }}"
+          fi
+
+          BODY="**Descrição do Bug**:\n${{ steps.parse.outputs.descricao }}\n\n**Localização**:\n${{ steps.parse.outputs.localizacao }}\n\n**Passos para Reprodução**:\n${{ steps.parse.outputs.passos }}\n\n**Evidências**:\n${{ steps.parse.outputs.evidencias }}\n\n**Resultado Esperado**:\n${{ steps.parse.outputs.resultado }}\n\n_Criada automaticamente após aprovação (Gemini 2.0 Flash)._"
+
+          OWNER=${DEST%%/*}
+          REPO=${DEST#*/}
+
+          RESP=$(gh api repos/$OWNER/$REPO/issues -f title="$TITLE" -f body="$BODY")
+          echo "$RESP" | jq -r '.html_url' > created_url.txt
+          echo "url=$(cat created_url.txt)" >> $GITHUB_OUTPUT
+
+      - name: Comentar link e fechar solicitação (se aprovado)
+        if: steps.gemini.outputs.aprovado == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs')
+            const url = fs.readFileSync('created_url.txt','utf8').trim()
+            const body = `✅ **Aprovada** e criada no destino:\n${url}\n\nFechando esta solicitação.`
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body
+            })
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              state: 'closed'
+            })
+
+      - name: Comentar e fechar solicitação (se reprovado)
+        if: steps.gemini.outputs.aprovado != 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs')
+            const j = JSON.parse(fs.readFileSync('gemini.json','utf8'))
+            const motivos = (j.motivos || []).map(m => `- ${m}`).join('\n')
+            const obs = j.observacoes ? `\n\n**Sugestões:**\n${j.observacoes}\n` : ''
+            const body = `A solicitação **não foi aprovada** pela validação automática.\n\n**Motivos:**\n${motivos}${obs}\n_Reveja e reabra com as correções._`
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body
+            })
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              state: 'closed'
+            })
