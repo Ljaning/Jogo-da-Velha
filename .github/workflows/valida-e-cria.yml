@@ -20,7 +20,6 @@ jobs:
       (github.event.action == 'labeled' && github.event.label.name == 'solicitacao')
     env:
       GEMINI_MODEL: gemini-2.5-flash
-      GH_TOKEN: ${{ secrets.GH_PAT }}
 
     steps:
       - name: Debug do evento
@@ -42,7 +41,7 @@ jobs:
               $0==header {flag=1; next}
               /^### / && flag {flag=0}
               flag {print}
-            ' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//'
+            ' | sed "s/^[[:space:]]*//; s/[[:space:]]*$//"
           }
 
           DESCRICAO=$(extrair "Descrição do Bug")
@@ -117,6 +116,8 @@ jobs:
 
       - name: Reprovar por pré-validação
         if: steps.precheck.outputs.found_errors == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }} # usar token padrão do Actions no repo de intake
         run: |
           {
             echo "A solicitação não foi aprovada pela validação automática."
@@ -233,6 +234,7 @@ jobs:
         if: steps.gemini.outputs.aprovado == 'true'
         id: create_issue
         env:
+          GH_TOKEN: ${{ secrets.GH_PAT }} # usar PAT apenas para criar no repo de destino
           DEST: ${{ steps.parse.outputs.destino }}
         run: |
           RAW="${{ steps.gemini.outputs.titulo_ok }}"
@@ -268,6 +270,8 @@ jobs:
 
       - name: Comentar link e fechar solicitação (se aprovado)
         if: steps.gemini.outputs.aprovado == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }} # comentar/fechar no intake com token padrão
         run: |
           url=$(cat created_url.txt)
           OWNER=$(echo "$GITHUB_REPOSITORY" | cut -d/ -f1)
@@ -285,6 +289,8 @@ jobs:
       # ===================== REPROVAÇÃO (pós-Gemini) =====================
       - name: Comentar e fechar solicitação (se reprovado)
         if: steps.precheck.outputs.found_errors == 'false' && steps.gemini.outputs.aprovado != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }} # comentar/fechar no intake com token padrão
         run: |
           jq -r '.motivos[]' gemini.json 2>/dev/null | sed 's/^/- /' > motivos.txt || echo "- Não informado." > motivos.txt
           jq -r '.sugestoes[]' gemini.json 2>/dev/null | sed 's/^/- /' > sugestoes.txt || echo "- Ajuste os campos obrigatórios conforme os motivos." > sugestoes.txt
