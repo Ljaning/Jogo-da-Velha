@@ -358,7 +358,7 @@ jobs:
           gh api repos/$OWNER_REPO/issues/$NUM/comments -f body="$(cat comment.txt)"
 
           gh api graphql -f query='
-            mutation($project:ID!, $item:ID!, $field:ID!, $opt:ID!){
+            mutation($project:ID!, $item:ID!, $field:ID!, $opt:String!){
               updateProjectV2ItemFieldValue(input:{
                 projectId:$project,
                 itemId:$item,
