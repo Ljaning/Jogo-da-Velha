@@ -11,6 +11,8 @@ permissions:
 jobs:
   gatekeep:
     runs-on: ubuntu-latest
+    # Executa se a issue já tem a label 'solicitacao' ao abrir
+    # ou se o evento atual é 'labeled' e a label é 'solicitacao'
     if: >
       contains(github.event.issue.labels.*.name, 'solicitacao') ||
       (github.event.action == 'labeled' && github.event.label.name == 'solicitacao')
@@ -30,6 +32,7 @@ jobs:
           BODY=$(printf "%s" "${{ github.event.issue.body }}")
 
           extrair() {
+            # Busca blocos estilo: "### <Label>\n<valor ... até próximo ###>"
             echo "$BODY" | awk -v header="### $1" '
               $0==header {flag=1; next}
               /^### / && flag {flag=0}
@@ -44,6 +47,7 @@ jobs:
           RESULTADO=$(extrair "Resultado Esperado")
           DESTINO=$(extrair "Repositório de destino" | head -n 1)
 
+          # Título automático: 1ª linha da descrição (até 80 chars)
           TITULO=$(printf "%s" "$DESCRICAO" | sed -n '1p' | sed 's/#\+//g; s/\r//g' | cut -c1-80)
           if [ -z "$TITULO" ]; then TITULO="Bug report"; fi
 
@@ -62,6 +66,7 @@ jobs:
         env:
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
         run: |
+          # ---- 1) SCHEMA: tipos em MAIÚSCULOS, sem union/null e sem additionalProperties ----
           SCHEMA=$(cat <<'JSON'
           {
             "type": "OBJECT",
@@ -76,6 +81,7 @@ jobs:
           JSON
           )
 
+          # ---- 2) SYSTEM: Content (role + parts[].text) ----
           SYS=$(cat <<'TXT'
           Você é um revisor de qualidade de bugs.
           Aprove apenas se TODOS os campos obrigatórios estiverem informativos:
@@ -88,6 +94,7 @@ jobs:
           TXT
           )
 
+          # ---- 3) USER: dados do formulário ----
           USER=$(cat <<'TXT'
           Descrição do Bug:
           ${{ steps.parse.outputs.descricao }}
@@ -106,6 +113,7 @@ jobs:
           TXT
           )
 
+          # ---- 4) Payload ----
           PAYLOAD=$(jq -n \
             --arg sys "$SYS" \
             --arg user "$USER" \
@@ -121,6 +129,7 @@ jobs:
             }'
           )
 
+          # ---- 5) Chamada HTTP com status para debug ----
           HTTP=$(curl -sS -w "%{http_code}" -o resp.json \
             -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent" \
             -H "Content-Type: application/json" \
@@ -134,6 +143,7 @@ jobs:
             exit 1
           fi
 
+          # ---- 6) Extrair JSON do modelo ----
           TEXT=$(jq -r '.candidates[0].content.parts[0].text // empty' resp.json)
           if [ -z "$TEXT" ]; then
             echo "Resposta sem conteúdo de texto esperado:"

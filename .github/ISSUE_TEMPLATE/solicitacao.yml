@@ -1,28 +1,61 @@
 name: Solicitação de criação de issue
 description: Forneça detalhes para análise automática
-title: "[Solicitação] <resumo curto>"
+title: "​"
 labels: ["solicitacao"]
 body:
-  - type: input
-    id: titulo
+  - type: textarea
+    id: descricao
     attributes:
-      label: Título sugerido
+      label: "Descrição do Bug"
+      description: "Explique de forma clara e objetiva o que está acontecendo."
+      placeholder: |
+        Exemplo:  
+        Ao adicionar um item ao carrinho, o sistema exibe um erro 500 e não conclui a operação.
     validations:
       required: true
+
   - type: textarea
-    id: problema
+    id: localizacao
     attributes:
-      label: Descrição / Problema
+      label: "Localização"
+      description: "Qual caminho ou tela onde o bug ocorre?"
+      placeholder: |
+        Exemplo:  
+        Home > Lista de Produtos > Produto XYZ > Botão 'Adicionar ao Carrinho'
     validations:
       required: true
+
   - type: textarea
-    id: passos
+    id: passos_para_reproducao
     attributes:
-      label: Passos para reproduzir (se bug)
+      label: "Passos para Reprodução"
+      description: "Liste passo a passo como chegar ao erro. Seja específico."
+      placeholder: |
+        1. Acesse a página de produtos.  
+        2. Selecione o produto “XYZ”.  
+        3. Clique em “Adicionar ao Carrinho”.  
+        4. Observe o erro 500.
+    validations:
+      required: true
+
   - type: textarea
-    id: criterio
+    id: evidencias
     attributes:
-      label: Critérios de aceite
+      label: "Evidências"
+      description: "Anexe prints ou vídeos que mostrem o bug."
+      placeholder: |
+        - Print: https://link-para-print.png  
+        - Vídeo: https://link-para-video.mp4
+    validations:
+      required: true
+
+  - type: textarea
+    id: resultados_esperados
+    attributes:
+      label: "Resultado Esperado"
+      description: "O que você esperava que acontecesse?"
+      placeholder: |
+        O item deve ser adicionado ao carrinho sem erros e exibir a quantidade atualizada.
     validations:
       required: true
   - type: dropdown
