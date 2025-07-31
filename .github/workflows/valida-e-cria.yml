@@ -304,6 +304,7 @@ jobs:
         if: steps.gemini.outputs.aprovado == 'true'
         id: create_issue
         env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
           DEST: ${{ steps.parse.outputs.destino }}
         run: |
           RAW="${{ steps.gemini.outputs.titulo_ok }}"
