@@ -4,15 +4,13 @@ on:
   issues:
     types: [opened, labeled]
 
-permissions:
-  issues: write
-  contents: read
+concurrency:
+  group: intake-${{ github.event.issue.node_id }}
+  cancel-in-progress: true
 
 jobs:
   gatekeep:
     runs-on: ubuntu-latest
-    # Executa se a issue já tem a label 'solicitacao' ao abrir
-    # ou se o evento atual é 'labeled' e a label é 'solicitacao'
     if: >
       contains(github.event.issue.labels.*.name, 'solicitacao') ||
       (github.event.action == 'labeled' && github.event.label.name == 'solicitacao')
