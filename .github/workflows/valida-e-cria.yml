@@ -307,60 +307,67 @@ jobs:
           echo "$RESP" | jq -r '.html_url' > created_url.txt
           echo "url=$(cat created_url.txt)" >> $GITHUB_OUTPUT
 
-      - name: Comentar link e mover para Backlog (projeto-teste)
-        if: steps.item.outputs.proceed == 'true' && steps.gemini.outputs.aprovado == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          OWNER_REPO: ${{ steps.item.outputs.issue_repo }}
-          NUM: ${{ steps.item.outputs.issue_num }}
-          PROJECT_ID: ${{ steps.item.outputs.project_id }}
-          ITEM_ID: ${{ steps.item.outputs.item_id }}
-          STATUS_FIELD_ID: ${{ steps.item.outputs.status_field_id }}
-        run: |
-          url=$(cat created_url.txt)
+    - name: Comentar link e mover para Backlog (projeto-teste)
+  if: steps.item.outputs.proceed == 'true' && steps.gemini.outputs.aprovado == 'true'
+  env:
+    GH_TOKEN: ${{ github.token }}
+    OWNER_REPO: ${{ steps.item.outputs.issue_repo }}
+    NUM: ${{ steps.item.outputs.issue_num }}
+    PROJECT_ID: ${{ steps.item.outputs.project_id }}
+    ITEM_ID: ${{ steps.item.outputs.item_id }}
+    STATUS_FIELD_ID: ${{ steps.item.outputs.status_field_id }}
+  run: |
+    set -e
+    url=$(cat created_url.txt)
 
-          gh api repos/$OWNER_REPO/issues/$NUM/comments -f body="Aprovada. Criada no destino:
-${url}
+    {
+      echo "Aprovada. Criada no destino:"
+      echo "$url"
+      echo
+      echo "Movendo para Backlog no projeto."
+    } > comment.txt
 
-Movendo para Backlog no projeto."
+    gh api repos/$OWNER_REPO/issues/$NUM/comments -f body="$(cat comment.txt)"
 
-          gh api graphql -f query='
-            query($pid:ID!){
-              node(id:$pid){
-                ... on ProjectV2{
-                  fields(first:100){
-                    nodes{
-                      ... on ProjectV2SingleSelectField{
-                        id name
-                        options{ id name }
-                      }
-                    }
-                  }
+    # 2) Descobrir optionId de Backlog
+    gh api graphql -f query='
+      query($pid:ID!){
+        node(id:$pid){
+          ... on ProjectV2{
+            fields(first:100){
+              nodes{
+                ... on ProjectV2SingleSelectField{
+                  id name
+                  options{ id name }
                 }
               }
-            }' -f pid="$PROJECT_ID" > fields.json
+            }
+          }
+        }
+      }' -f pid="$PROJECT_ID" > fields.json
 
-          STATUS_FIELD_ID_LOCAL="$STATUS_FIELD_ID"
-          BACKLOG_OPT=$(jq -r --arg fid "$STATUS_FIELD_ID_LOCAL" '
-            .data.node.fields.nodes[]
-            | select(.id==$fid)
-            | .options[] | select(.name=="Backlog") | .id
-          ' fields.json)
+    STATUS_FIELD_ID_LOCAL="$STATUS_FIELD_ID"
+    BACKLOG_OPT=$(jq -r --arg fid "$STATUS_FIELD_ID_LOCAL" '
+      .data.node.fields.nodes[]
+      | select(.id==$fid)
+      | .options[] | select(.name=="Backlog") | .id
+    ' fields.json)
 
-          if [ -z "$BACKLOG_OPT" ] || [ "$BACKLOG_OPT" = "null" ]; then
-            echo "Não achei optionId para Backlog no campo Status." >&2
-            exit 1
-          fi
+    if [ -z "$BACKLOG_OPT" ] || [ "$BACKLOG_OPT" = "null" ]; then
+      echo "Não achei optionId para Backlog no campo Status." >&2
+      exit 1
+    fi
 
-          gh api graphql -f query='
-            mutation($project:ID!, $item:ID!, $field:ID!, $opt:ID!){
-              updateProjectV2ItemFieldValue(input:{
-                projectId:$project,
-                itemId:$item,
-                fieldId:$field,
-                value:{ singleSelectOptionId:$opt }
-              }){ clientMutationId }
-            }' -f project="$PROJECT_ID" -f item="$ITEM_ID" -f field="$STATUS_FIELD_ID_LOCAL" -f opt="$BACKLOG_OPT" >/dev/null
+    gh api graphql -f query='
+      mutation($project:ID!, $item:ID!, $field:ID!, $opt:ID!){
+        updateProjectV2ItemFieldValue(input:{
+          projectId:$project,
+          itemId:$item,
+          fieldId:$field,
+          value:{ singleSelectOptionId:$opt }
+        }){ clientMutationId }
+      }' -f project="$PROJECT_ID" -f item="$ITEM_ID" -f field="$STATUS_FIELD_ID_LOCAL" -f opt="$BACKLOG_OPT" >/dev/null
+
 
       # ===================== REPROVADO (NÃO FECHA) =====================
       - name: Comentar (reprovado) — não fecha
@@ -371,7 +378,7 @@ Movendo para Backlog no projeto."
           NUM: ${{ steps.item.outputs.issue_num }}
         run: |
           jq -r '.motivos[]' gemini.json 2>/dev/null | sed 's/^/- /' > motivos.txt || echo "- Não informado." > motivos.txt
-          jq -r '.sugestoes[]' gemini.json 2>/devnull | sed 's/^/- /' > sugestoes.txt || echo "- Ajuste os campos obrigatórios conforme os motivos." > sugestoes.txt
+          jq -r '.sugestoes[]' gemini.json 2>/dev/null | sed 's/^/- /' > sugestoes.txt || echo "- Ajuste os campos obrigatórios conforme os motivos." > sugestoes.txt
 
           {
             echo "A solicitação não foi aprovada pela validação automática."
