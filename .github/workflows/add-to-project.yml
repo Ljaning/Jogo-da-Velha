@@ -11,12 +11,13 @@ permissions:
 jobs:
   add:
     runs-on: ubuntu-latest
-    if: contains(github.event.issue.labels.*.name, 'Solicitacao') # ajuste se o label do template for outro
+    # (sem 'if:' aqui; não dependemos de label)
     env:
       GH_TOKEN: ${{ secrets.GH_PAT }} # PAT com acesso a Projects v2 da organização
       ORG: Ljaning
       PROJECT_TITLE: projeto-teste
       ISSUE_NODE: ${{ github.event.issue.node_id }}
+
     steps:
       - name: Resolver IDs do projeto e adicionar item
         run: |
@@ -46,7 +47,7 @@ jobs:
           ITEM_ID=$(jq -r '.data.addProjectV2ItemById.item.id' add.json)
           [ -n "$ITEM_ID" ] || { echo "Falha ao adicionar item ao projeto"; exit 1; }
 
-          # 3) Busca campo Status e a opção "Triage"
+          # 3) Busca campo Status e as opções "Triage" e "Backlog"
           gh api graphql -f query='
             query($pid:ID!){
               node(id:$pid){
@@ -67,8 +68,7 @@ jobs:
           TRIAGE_OPT=$(jq -r '.data.node.fields.nodes[] | select(.name=="Status") | .options[] | select(.name=="Triage") | .id' fields.json)
           [ -n "$STATUS_FIELD_ID" ] && [ -n "$TRIAGE_OPT" ] || { echo "Campo Status e/ou opção Triage não encontrados"; exit 1; }
 
-          # 4) Seta Status = Triage para o item
-          #    >>>> ALTERAÇÃO: $opt agora é String! (não ID!)
+          # 4) Seta Status = Triage para o item (nota: singleSelectOptionId é String!)
           gh api graphql -f query='
             mutation($project:ID!, $item:ID!, $field:ID!, $opt:String!){
               updateProjectV2ItemFieldValue(input:{
@@ -79,6 +79,7 @@ jobs:
               }){
                 clientMutationId
               }
-            }' -f project="$PROJECT_ID" -f item="$ITEM_ID" -f field="$STATUS_FIELD_ID" -f opt="$TRIAGE_OPT" >/dev/null
+            }' \
+            -f project="$PROJECT_ID" -f item="$ITEM_ID" -f field="$STATUS_FIELD_ID" -f opt="$TRIAGE_OPT" >/dev/null
 
           echo "Item adicionado ao projeto \"$PROJECT_TITLE\" e movido para Status=Triage."
