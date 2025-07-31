@@ -94,14 +94,15 @@ jobs:
 
           # 1.4) Setar Status=Triage no item recém-adicionado
           gh api graphql -f query='
-            mutation($project:ID!, $item:ID!, $field:ID!, $opt:ID!){
+            mutation($project:ID!, $item:ID!, $field:ID!, $opt:String!){
               updateProjectV2ItemFieldValue(input:{
                 projectId:$project,
                 itemId:$item,
                 fieldId:$field,
                 value:{ singleSelectOptionId:$opt }
               }){ clientMutationId }
-            }' -f project="$PROJECT_ID" -f item="$ITEM_ID" -f field="$STATUS_FIELD_ID" -f opt="$TRIAGE_OPT" >/dev/null
+            }' \
+            -f project="$PROJECT_ID" -f item="$ITEM_ID" -f field="$STATUS_FIELD_ID" -f opt="$TRIAGE_OPT" >/dev/null
 
           {
             echo "project_id=$PROJECT_ID"
