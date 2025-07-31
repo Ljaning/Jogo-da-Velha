@@ -115,62 +115,63 @@ jobs:
       - name: Dump do corpo da issue
         run: |
           printf "%s" "${{ github.event.issue.body }}" > issue_body.md
-# 3) Extrair campos do formulário
-- name: Extrair campos do formulário
-  id: parse
-  run: |
-    set -e
 
-    BODY=$(printf "%s" "${{ github.event.issue.body }}")
+      # 3) Extrair campos do formulário
+      - name: Extrair campos do formulário
+        id: parse
+        run: |
+          set -e
 
-    # 1) extrair(): aceita indentação antes de "### "
-    extrair() {
-      # Match do cabeçalho "### <label>" permitindo espaços antes/depois
-      awk -v header="$1" '
-        BEGIN{ pat="^[[:space:]]*### " header "[[:space:]]*$" }
-        $0 ~ pat {flag=1; next}
-        /^[[:space:]]*### [^#]/ && flag {flag=0}  # próximo H3 encerra a seção
-        flag {print}
-      ' <<< "$BODY" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//'
-    }
+          BODY=$(printf "%s" "${{ github.event.issue.body }}")
 
-    # 2) extrair_nn(): primeira linha não-vazia da seção
-    extrair_nn() {
-      extrair "$1" | awk 'NF{print; exit}'
-    }
-
-    # 3) extrair_bold(): conserta a regex e aceita indentação
-    extrair_bold() {
-      awk -v lbl="$1" '
-        BEGIN{
-          # ** Rótulo **  (com espaços opcionais e indentação)
-          pat="^[[:space:]]*\\*\\*[[:space:]]*" lbl "[[:space:]]*\\*\\*[[:space:]]*$"
-        }
-        $0 ~ pat {
-          # retorna a 1ª linha não-vazia após o título em negrito
-          while (getline) {
-            if ($0 !~ /^[[:space:]]*$/) { print; exit }
+          # 1) extrair(): aceita indentação antes de "### "
+          extrair() {
+            # Match do cabeçalho "### <label>" permitindo espaços antes/depois
+            awk -v header="$1" '
+              BEGIN{ pat="^[[:space:]]*### " header "[[:space:]]*$" }
+              $0 ~ pat {flag=1; next}
+              /^[[:space:]]*### [^#]/ && flag {flag=0}  # próximo H3 encerra a seção
+              flag {print}
+            ' <<< "$BODY" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//'
           }
-        }
-      ' <<< "$BODY" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//'
-    }
 
-    # 4) Coleta do DESTINO com fallbacks
-    DESTINO="$(extrair_nn "Repositório de destino")"
-    [ -z "$DESTINO" ] && DESTINO="$(extrair_nn "Destino")"
-    [ -z "$DESTINO" ] && DESTINO="$(extrair_nn "Target repository")"
-    [ -z "$DESTINO" ] && DESTINO="$(extrair_nn "Repositório")"
+          # 2) extrair_nn(): primeira linha não-vazia da seção
+          extrair_nn() {
+            extrair "$1" | awk 'NF{print; exit}'
+          }
 
-    # Fallback p/ forma em negrito
-    [ -z "$DESTINO" ] && DESTINO="$(extrair_bold "Repositório de destino")"
-    [ -z "$DESTINO" ] && DESTINO="$(extrair_bold "Destino")"
-    [ -z "$DESTINO" ] && DESTINO="$(extrair_bold "Target repository")"
-    [ -z "$DESTINO" ] && DESTINO="$(extrair_bold "Repositório")"
+          # 3) extrair_bold(): conserta a regex e aceita indentação
+          extrair_bold() {
+            awk -v lbl="$1" '
+              BEGIN{
+                # ** Rótulo **  (com espaços opcionais e indentação)
+                pat="^[[:space:]]*\\*\\*[[:space:]]*" lbl "[[:space:]]*\\*\\*[[:space:]]*$"
+              }
+              $0 ~ pat {
+                # retorna a 1ª linha não-vazia após o título em negrito
+                while (getline) {
+                  if ($0 !~ /^[[:space:]]*$/) { print; exit }
+                }
+              }
+            ' <<< "$BODY" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//'
+          }
 
-    # Debug (opcional)
-    echo "::group::DEBUG parse"
-    echo "Destino extraído: '${DESTINO}'"
-    echo "::endgroup::"
+          # 4) Coleta do DESTINO com fallbacks
+          DESTINO="$(extrair_nn "Repositório de destino")"
+          [ -z "$DESTINO" ] && DESTINO="$(extrair_nn "Destino")"
+          [ -z "$DESTINO" ] && DESTINO="$(extrair_nn "Target repository")"
+          [ -z "$DESTINO" ] && DESTINO="$(extrair_nn "Repositório")"
+
+          # Fallback p/ forma em negrito
+          [ -z "$DESTINO" ] && DESTINO="$(extrair_bold "Repositório de destino")"
+          [ -z "$DESTINO" ] && DESTINO="$(extrair_bold "Destino")"
+          [ -z "$DESTINO" ] && DESTINO="$(extrair_bold "Target repository")"
+          [ -z "$DESTINO" ] && DESTINO="$(extrair_bold "Repositório")"
+
+          # Debug (opcional)
+          echo "::group::DEBUG parse"
+          echo "Destino extraído: '${DESTINO}'"
+          echo "::endgroup::"
 
       # 4) Pré-validação determinística
       - name: Pré-validação determinística
@@ -368,7 +369,7 @@ jobs:
             exit 0
           fi
 
-          echo "Destino resolvido: OWNER='$OWNER' REPO='$REPO'"
+          echo "Destino resolvido: OWNER='${OWNER}' REPO='${REPO}'"
 
           # 2) Sanity check de acesso do PAT ao repo alvo (precisa 'repo' ou perm equivalente)
           gh api -X GET "repos/$OWNER/$REPO" -q .full_name >/dev/null || {
