@@ -1,0 +1,73 @@
+name: Add issue ao Project v2 (projeto-teste)
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  issues: read
+  projects: write
+
+jobs:
+  add:
+    runs-on: ubuntu-latest
+    if: contains(github.event.issue.labels.*.name, 'Solicitacao') # ajuste se o label do template for outro
+    steps:
+      - name: Resolver IDs do projeto e adicionar item
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ORG: Ljaning
+          PROJECT_TITLE: projeto-teste
+          ISSUE_NODE: ${{ github.event.issue.node_id }}
+        run: |
+          set -e
+          # 1) Achar o projeto por título
+          gh api graphql -f query='
+            query($org:String!){
+              organization(login:$org){
+                projectsV2(first:100){
+                  nodes{ id title }
+                }
+              }
+            }' -f org="$ORG" > proj.json
+          PROJECT_ID=$(jq -r --arg t "$PROJECT_TITLE" '.data.organization.projectsV2.nodes[] | select(.title==$t) | .id' proj.json)
+          [ -n "$PROJECT_ID" ] || { echo "Projeto $PROJECT_TITLE não encontrado"; exit 1; }
+
+          # 2) Adicionar a issue como item do projeto
+          gh api graphql -f query='
+            mutation($pid:ID!, $cid:ID!){
+              addProjectV2ItemById(input:{projectId:$pid, contentId:$cid}){ item { id } }
+            }' -f pid="$PROJECT_ID" -f cid="$ISSUE_NODE" > add.json
+          ITEM_ID=$(jq -r '.data.addProjectV2ItemById.item.id' add.json)
+
+          # 3) Descobrir campo Status e option Backlog/Triage
+          gh api graphql -f query='
+            query($pid:ID!){
+              node(id:$pid){
+                ... on ProjectV2{
+                  fields(first:100){
+                    nodes{
+                      ... on ProjectV2SingleSelectField{
+                        id name
+                        options{ id name }
+                      }
+                    }
+                  }
+                }
+              }
+            }' -f pid="$PROJECT_ID" > fields.json
+
+          STATUS_FIELD_ID=$(jq -r '.data.node.fields.nodes[] | select(.name=="Status") | .id' fields.json)
+          TRIAGE_OPT=$(jq -r '.data.node.fields.nodes[] | select(.name=="Status") | .options[] | select(.name=="Triage") | .id' fields.json)
+          [ -n "$STATUS_FIELD_ID" ] && [ -n "$TRIAGE_OPT" ] || { echo "Campo Status/Triage não encontrado"; exit 1; }
+
+          # 4) Setar Status = Triage
+          gh api graphql -f query='
+            mutation($project:ID!, $item:ID!, $field:ID!, $opt:ID!){
+              updateProjectV2ItemFieldValue(input:{
+                projectId:$project,
+                itemId:$item,
+                fieldId:$field,
+                value:{ singleSelectOptionId:$opt }
+              }){ clientMutationId }
+            }' -f project="$PROJECT_ID" -f item="$ITEM_ID" -f field="$STATUS_FIELD_ID" -f opt="$TRIAGE_OPT" >/dev/null
