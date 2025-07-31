@@ -304,38 +304,46 @@ jobs:
         if: steps.gemini.outputs.aprovado == 'true'
         id: create_issue
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT }}
+          GH_TOKEN: ${{ secrets.GH.PAT }}
           DEST: ${{ steps.parse.outputs.destino }}
         run: |
           RAW="${{ steps.gemini.outputs.titulo_ok }}"
           [ -z "$RAW" ] || [ "$RAW" = "null" ] && RAW="$(printf "%s" "${{ steps.parse.outputs.titulo }}")"
-          TITLE=$(printf "%s\n" "$RAW" | awk '{ n=10; for(i=1;i<=NF && i<=n;i++) printf("%s%s",$i,(i==n||i==NF)?"":" "); print "" }')
+          TITLE=$(printf "%s\n" "$RAW" | awk '{ n=7; for(i=1;i<=NF && i<=n;i++) printf("%s%s",$i,(i==n||i==NF)?"":" "); print "" }')
 
-          {
-            echo "**Descrição do Bug:**"
-            echo "${{ steps.parse.outputs.descricao }}"
-            echo
-            echo "**Localização:**"
-            echo "${{ steps.parse.outputs.localizacao }}"
-            echo
-            echo "**Passos para Reprodução:**"
-            echo "${{ steps.parse.outputs.passos }}"
-            echo
-            echo "**Evidências:**"
-            echo "${{ steps.parse.outputs.evidencias }}"
-            echo
-            echo "**Resultado Esperado:**"
-            echo "${{ steps.parse.outputs.resultado }}"
-            echo
-            echo "_Criada automaticamente após aprovação (Gemini 2.5 Flash)._"
-          } > body.txt
-
+          DEST=$(printf "%s" "$DEST_RAW" | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
           OWNER=${DEST%%/*}
           REPO=${DEST#*/}
-          RESP=$(gh api repos/$OWNER/$REPO/issues -f title="$TITLE" -f body="$(cat body.txt)")
+
+          echo "Destino resolvido: OWNER='$OWNER' REPO='$REPO'"
+
+          gh api -X GET "repos/$OWNER/$REPO" -q .full_name >/dev/null || {
+          echo "O token não tem acesso a repos/$OWNER/$REPO (ou repo não existe)." >&2
+          exit 1
+        } 
+
+            {
+          echo "**Descrição do Bug:**"
+          echo "${{ steps.parse.outputs.descricao }}"
+          echo
+          echo "**Localização:**"
+          echo "${{ steps.parse.outputs.localizacao }}"
+          echo
+          echo "**Passos para Reprodução:**"
+          echo "${{ steps.parse.outputs.passos }}"
+          echo
+          echo "**Evidências:**"
+          echo "${{ steps.parse.outputs.evidencias }}"
+          echo
+          echo "**Resultado Esperado:**"
+          echo "${{ steps.parse.outputs.resultado }}"
+          echo
+          echo "_Criada automaticamente após aprovação (Gemini 2.5 Flash)._"
+        } > body.txt
+
+          RESP=$(gh api "repos/$OWNER/$REPO/issues" -f title="$TITLE" -f body="$(cat body.txt)")
           echo "$RESP" | jq -r '.html_url' > created_url.txt
           echo "url=$(cat created_url.txt)" >> $GITHUB_OUTPUT
-
       # 8) Aprovado: comenta e move para Backlog
       - name: Comentar link e mover para Backlog (no projeto)
         if: steps.gemini.outputs.aprovado == 'true'
