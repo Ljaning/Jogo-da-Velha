@@ -1,101 +1,123 @@
 name: Validar solicitação com Gemini 2.5 Flash e criar issue
 
 on:
-  projects_v2_item:
-    types: [edited] # dispara quando um item do Project v2 é editado
+  issues:
+    types: [opened] # dispara ao abrir a issue; o próprio workflow põe Status=Triage no Project
 
 concurrency:
-  group: intake-${{ github.event.projects_v2_item.node_id }}
+  group: intake-${{ github.event.issue.node_id }}
   cancel-in-progress: true
 
 permissions:
   issues: write
   contents: read
-  # (não use 'projects' aqui; se precisar de acesso a Projects v2, use PAT no GH_TOKEN dos steps)
+  # Para Projects v2, use GH_PAT nos steps (não existe chave 'projects' aqui)
 
 jobs:
   gatekeep:
     runs-on: ubuntu-latest
     env:
       GEMINI_MODEL: gemini-2.5-flash
+      GH_TOKEN: ${{ secrets.GH_PAT }} # PAT com Projects:RW e Issues:RW
 
     steps:
-      - name: Debug do evento (Projects v2)
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Debug do evento
         run: |
-          echo "action: ${{ github.event.action }}"
-          echo "item.node_id: ${{ github.event.projects_v2_item.node_id }}"
-          echo "project_node_id: ${{ github.event.projects_v2_item.project_node_id }}"
+          echo "issue: ${{ github.event.issue.html_url }}"
+          echo "labels: ${{ toJson(github.event.issue.labels) }}"
 
-      - name: Carregar item (issue, projeto, status)
-        id: item
+      # 1) Adiciona a issue ao Project 'projeto-teste' e seta Status=Triage
+      - name: Adicionar ao Project v2 e setar Status=Triage
+        id: pitem
         env:
-          GH_TOKEN: ${{ github.token }}
-          ITEM_NODE: ${{ github.event.projects_v2_item.node_id }}
+          ORG: Ljaning
+          PROJECT_TITLE: projeto-teste
+          ISSUE_NODE: ${{ github.event.issue.node_id }}
         run: |
           set -e
 
+          # 1.1) Descobrir o ID do projeto por título
           gh api graphql -f query='
-            query($id:ID!){
-              node(id:$id){
-                ... on ProjectV2Item{
-                  id
-                  project { id title }
-                  content{
-                    __typename
-                    ... on Issue{
-                      id number title body url
-                      repository{ nameWithOwner }
-                    }
-                  }
-                  fieldValues(first:50){
+            query($org:String!){
+              organization(login:$org){
+                projectsV2(first:100){
+                  nodes{ id title }
+                }
+              }
+            }' -f org="$ORG" > proj.json
+
+          PROJECT_ID=$(jq -r --arg t "$PROJECT_TITLE" '.data.organization.projectsV2.nodes[] | select(.title==$t) | .id' proj.json)
+          if [ -z "$PROJECT_ID" ] || [ "$PROJECT_ID" = "null" ]; then
+            echo "Projeto \"$PROJECT_TITLE\" não encontrado na organização $ORG." >&2
+            exit 1
+          fi
+
+          # 1.2) Adicionar a issue como item do projeto
+          gh api graphql -f query='
+            mutation($pid:ID!, $cid:ID!){
+              addProjectV2ItemById(input:{projectId:$pid, contentId:$cid}){
+                item { id }
+              }
+            }' -f pid="$PROJECT_ID" -f cid="$ISSUE_NODE" > add.json
+
+          ITEM_ID=$(jq -r '.data.addProjectV2ItemById.item.id' add.json)
+          if [ -z "$ITEM_ID" ] || [ "$ITEM_ID" = "null" ]; then
+            echo "Falha ao adicionar a issue como item do projeto." >&2
+            exit 1
+          fi
+
+          # 1.3) Obter campo Status e optionId de Triage e Backlog
+          gh api graphql -f query='
+            query($pid:ID!){
+              node(id:$pid){
+                ... on ProjectV2{
+                  fields(first:100){
                     nodes{
-                      __typename
-                      ... on ProjectV2ItemFieldSingleSelectValue{
-                        name
-                        optionId
-                        field{ ... on ProjectV2FieldCommon { id name } }
+                      ... on ProjectV2SingleSelectField{
+                        id name
+                        options{ id name }
                       }
                     }
                   }
                 }
               }
-            }' -f id="$ITEM_NODE" > item.json
+            }' -f pid="$PROJECT_ID" > fields.json
 
-          PROJ_TITLE=$(jq -r '.data.node.project.title' item.json)
-          PROJ_ID=$(jq -r '.data.node.project.id' item.json)
-          ITEM_ID=$(jq -r '.data.node.id' item.json)
-          STATUS_NAME=$(jq -r '.data.node.fieldValues.nodes[] | select(.field.name=="Status") | .name' item.json)
-          STATUS_FIELD_ID=$(jq -r '.data.node.fieldValues.nodes[] | select(.field.name=="Status") | .field.id' item.json)
+          STATUS_FIELD_ID=$(jq -r '.data.node.fields.nodes[] | select(.name=="Status") | .id' fields.json)
+          TRIAGE_OPT=$(jq -r '.data.node.fields.nodes[] | select(.name=="Status") | .options[] | select(.name=="Triage") | .id' fields.json)
+          BACKLOG_OPT=$(jq -r '.data.node.fields.nodes[] | select(.name=="Status") | .options[] | select(.name=="Backlog") | .id' fields.json)
 
-          ISSUE_REPO=$(jq -r '.data.node.content.repository.nameWithOwner' item.json)
-          ISSUE_NUM=$(jq -r '.data.node.content.number' item.json)
-          ISSUE_BODY=$(jq -r '.data.node.content.body // empty' item.json)
-
-          echo "Projeto: $PROJ_TITLE"
-          echo "Status:  $STATUS_NAME"
-          echo "Issue:   $ISSUE_REPO #$ISSUE_NUM"
-
-          if [ "$PROJ_TITLE" != "projeto-teste" ] || [ "$STATUS_NAME" != "Triage" ]; then
-            echo "proceed=false" >> $GITHUB_OUTPUT
-            exit 0
+          if [ -z "$STATUS_FIELD_ID" ] || [ -z "$TRIAGE_OPT" ] || [ -z "$BACKLOG_OPT" ]; then
+            echo "Campo 'Status' e/ou opções 'Triage'/'Backlog' não encontrados no projeto." >&2
+            exit 1
           fi
 
+          # 1.4) Setar Status=Triage no item recém-adicionado
+          gh api graphql -f query='
+            mutation($project:ID!, $item:ID!, $field:ID!, $opt:ID!){
+              updateProjectV2ItemFieldValue(input:{
+                projectId:$project,
+                itemId:$item,
+                fieldId:$field,
+                value:{ singleSelectOptionId:$opt }
+              }){ clientMutationId }
+            }' -f project="$PROJECT_ID" -f item="$ITEM_ID" -f field="$STATUS_FIELD_ID" -f opt="$TRIAGE_OPT" >/dev/null
+
           {
-            echo "proceed=true"
-            echo "project_id=$PROJ_ID"
+            echo "project_id=$PROJECT_ID"
             echo "item_id=$ITEM_ID"
             echo "status_field_id=$STATUS_FIELD_ID"
-            echo "issue_repo=$ISSUE_REPO"
-            echo "issue_num=$ISSUE_NUM"
+            echo "backlog_opt=$BACKLOG_OPT"
           } >> $GITHUB_OUTPUT
 
-          printf "%s" "$ISSUE_BODY" > issue_body.md
+      # 2) Captura o corpo da issue aberta (template)
+      - name: Dump do corpo da issue
+        run: |
+          printf "%s" "${{ github.event.issue.body }}" > issue_body.md
 
+      # 3) Extrair campos do formulário
       - name: Extrair campos do formulário
         id: parse
-        if: steps.item.outputs.proceed == 'true'
         run: |
           BODY=$(cat issue_body.md)
 
@@ -127,10 +149,9 @@ jobs:
             echo "titulo=$TITULO";
           } >> $GITHUB_OUTPUT
 
-      # =============== PRÉ-VALIDAÇÃO (regras objetivas) ===============
+      # 4) Pré-validação determinística
       - name: Pré-validação determinística
         id: precheck
-        if: steps.item.outputs.proceed == 'true'
         run: |
           fail() { echo "$1" >> precheck_errors.txt; }
 
@@ -140,24 +161,31 @@ jobs:
           EVID="${{ steps.parse.outputs.evidencias }}"
           RES="${{ steps.parse.outputs.resultado }}"
 
+          # Limite total
           TOTLEN=$(printf "%s%s%s%s%s" "$DESC" "$LOC" "$PASS" "$EVID" "$RES" | wc -c)
           [ "$TOTLEN" -gt 450 ] && fail "Texto total ultrapassa 450 caracteres (atual: ${TOTLEN})."
 
+          # Descrição: no máximo 2 frases
           SENT=$(printf "%s" "$DESC" | tr '\n' ' ' | grep -oE '[.!?]' | wc -l || true)
           [ "$SENT" -gt 2 ] && fail "Descrição do Bug deve ter no máximo 2 frases com contexto (como/quando)."
 
+          # Localização obrigatória
           [ -z "$(printf "%s" "$LOC" | tr -d '[:space:]')" ] && \
             fail "Localização obrigatória; informe o caminho/tela (ex.: Tela principal > Tabuleiro)."
 
+          # Passos: numerados e >=2
           CNT=$(printf "%s" "$PASS" | grep -E '^[[:space:]]*[0-9]+[.)]' | wc -l || true)
           [ "$CNT" -lt 2 ] && fail "Passos para Reprodução devem ser numerados (1), 2), ...) e ter no mínimo 2 passos."
 
+          # Evidências: pelo menos 1 URL/arquivo
           printf "%s" "$EVID" | grep -Eiq '!\[[^]]*\]\(|https?://|\.png|\.jpg|\.jpeg|\.gif|\.mp4|\.mov' || \
             fail "Evidências devem conter ao menos 1 URL (print/vídeo) ou arquivo anexado."
 
+          # Resultado: não genérico
           printf "%s" "$RES" | grep -Eiq 'funcion(a|e) corretamente|sem erro(s)?|deveria funcionar|ok' && \
             fail "Resultado esperado está genérico; descreva comportamento específico e verificável."
 
+          # PII/segredos (heurística)
           printf "%s %s %s" "$DESC" "$EVID" "$PASS" | \
           grep -Eiq '(AKIA[0-9A-Z]{16}|-----BEGIN (RSA|OPENSSH) PRIVATE KEY-----|password=|secret=|x-api-key|token=|Authorization: Bearer)' && {
             echo "escalar=true" >> $GITHUB_OUTPUT
@@ -170,12 +198,12 @@ jobs:
             echo "found_errors=false" >> $GITHUB_OUTPUT
           fi
 
+      # 5) Reprovar por pré-validação (não fecha)
       - name: Comentar por pré-validação (não fecha)
-        if: steps.item.outputs.proceed == 'true' && steps.precheck.outputs.found_errors == 'true'
+        if: steps.precheck.outputs.found_errors == 'true'
         env:
-          GH_TOKEN: ${{ github.token }}
-          OWNER_REPO: ${{ steps.item.outputs.issue_repo }}
-          NUM: ${{ steps.item.outputs.issue_num }}
+          OWNER_REPO: ${{ github.event.repository.full_name }}
+          NUM: ${{ github.event.issue.number }}
         run: |
           {
             echo "A solicitação não foi aprovada pela validação automática."
@@ -200,12 +228,11 @@ jobs:
 
           gh api repos/$OWNER_REPO/issues/$NUM/comments -f body="$(cat body.txt)"
 
-      # ===================== GEMINI 2.5 FLASH =====================
+      # 6) Gemini 2.5 Flash (só se passou na pré)
       - name: Validar com Gemini 2.5 Flash (JSON estrito)
         id: gemini
-        if: steps.item.outputs.proceed == 'true' && steps.precheck.outputs.found_errors == 'false'
+        if: steps.precheck.outputs.found_errors == 'false'
         env:
-          GH_TOKEN: ${{ github.token }}
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
           GEMINI_MODEL: ${{ env.GEMINI_MODEL }}
         run: |
@@ -270,12 +297,11 @@ jobs:
           echo "aprovado=$APROVADO" >> $GITHUB_OUTPUT
           echo "titulo_ok=$TITULO_CORRIGIDO" >> $GITHUB_OUTPUT
 
-      # ===================== APROVADO =====================
+      # 7) Aprovado: cria issue no destino
       - name: Criar issue no repositório de destino (se aprovado)
-        if: steps.item.outputs.proceed == 'true' && steps.gemini.outputs.aprovado == 'true'
+        if: steps.gemini.outputs.aprovado == 'true'
         id: create_issue
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT }} # PAT apenas para criar no destino
           DEST: ${{ steps.parse.outputs.destino }}
         run: |
           RAW="${{ steps.gemini.outputs.titulo_ok }}"
@@ -307,56 +333,28 @@ jobs:
           echo "$RESP" | jq -r '.html_url' > created_url.txt
           echo "url=$(cat created_url.txt)" >> $GITHUB_OUTPUT
 
-      - name: Comentar link e mover para Backlog (projeto-teste)
-        if: steps.item.outputs.proceed == 'true' && steps.gemini.outputs.aprovado == 'true'
+      # 8) Aprovado: comenta e move para Backlog
+      - name: Comentar link e mover para Backlog (no projeto)
+        if: steps.gemini.outputs.aprovado == 'true'
         env:
-          GH_TOKEN: ${{ github.token }}
-          OWNER_REPO: ${{ steps.item.outputs.issue_repo }}
-          NUM: ${{ steps.item.outputs.issue_num }}
-          PROJECT_ID: ${{ steps.item.outputs.project_id }}
-          ITEM_ID: ${{ steps.item.outputs.item_id }}
-          STATUS_FIELD_ID: ${{ steps.item.outputs.status_field_id }}
+          OWNER_REPO: ${{ github.event.repository.full_name }}
+          NUM: ${{ github.event.issue.number }}
+          PROJECT_ID: ${{ steps.pitem.outputs.project_id }}
+          ITEM_ID: ${{ steps.pitem.outputs.item_id }}
+          STATUS_FIELD_ID: ${{ steps.pitem.outputs.status_field_id }}
+          BACKLOG_OPT: ${{ steps.pitem.outputs.backlog_opt }}
         run: |
           set -e
           url=$(cat created_url.txt)
 
           {
-            echo "Aprovada. Criada no destino:"
+            echo "✅ Aprovada. Criada no destino:"
             echo "$url"
             echo
-            echo "Movendo para Backlog no projeto."
+            echo "Movendo o item do projeto para **Backlog**."
           } > comment.txt
 
           gh api repos/$OWNER_REPO/issues/$NUM/comments -f body="$(cat comment.txt)"
-
-          # Descobrir optionId de Backlog
-          gh api graphql -f query='
-            query($pid:ID!){
-              node(id:$pid){
-                ... on ProjectV2{
-                  fields(first:100){
-                    nodes{
-                      ... on ProjectV2SingleSelectField{
-                        id name
-                        options{ id name }
-                      }
-                    }
-                  }
-                }
-              }
-            }' -f pid="$PROJECT_ID" > fields.json
-
-          STATUS_FIELD_ID_LOCAL="$STATUS_FIELD_ID"
-          BACKLOG_OPT=$(jq -r --arg fid "$STATUS_FIELD_ID_LOCAL" '
-            .data.node.fields.nodes[]
-            | select(.id==$fid)
-            | .options[] | select(.name=="Backlog") | .id
-          ' fields.json)
-
-          if [ -z "$BACKLOG_OPT" ] || [ "$BACKLOG_OPT" = "null" ]; then
-            echo "Não achei optionId para Backlog no campo Status." >&2
-            exit 1
-          fi
 
           gh api graphql -f query='
             mutation($project:ID!, $item:ID!, $field:ID!, $opt:ID!){
@@ -366,15 +364,15 @@ jobs:
                 fieldId:$field,
                 value:{ singleSelectOptionId:$opt }
               }){ clientMutationId }
-            }' -f project="$PROJECT_ID" -f item="$ITEM_ID" -f field="$STATUS_FIELD_ID_LOCAL" -f opt="$BACKLOG_OPT" >/dev/null
+            }' \
+            -f project="$PROJECT_ID" -f item="$ITEM_ID" -f field="$STATUS_FIELD_ID" -f opt="$BACKLOG_OPT" >/dev/null
 
-      # ===================== REPROVADO (NÃO FECHA) =====================
+      # 9) Reprovado: comentar (não fecha)
       - name: Comentar (reprovado) — não fecha
-        if: steps.item.outputs.proceed == 'true' && steps.gemini.outputs.aprovado != 'true' && steps.precheck.outputs.found_errors == 'false'
+        if: steps.precheck.outputs.found_errors == 'false' && steps.gemini.outputs.aprovado != 'true'
         env:
-          GH_TOKEN: ${{ github.token }}
-          OWNER_REPO: ${{ steps.item.outputs.issue_repo }}
-          NUM: ${{ steps.item.outputs.issue_num }}
+          OWNER_REPO: ${{ github.event.repository.full_name }}
+          NUM: ${{ github.event.issue.number }}
         run: |
           jq -r '.motivos[]' gemini.json 2>/dev/null | sed 's/^/- /' > motivos.txt || echo "- Não informado." > motivos.txt
           jq -r '.sugestoes[]' gemini.json 2>/dev/null | sed 's/^/- /' > sugestoes.txt || echo "- Ajuste os campos obrigatórios conforme os motivos." > sugestoes.txt
