@@ -126,52 +126,67 @@ jobs:
 
           # 1) extrair(): aceita indentação antes de "### "
           extrair() {
-            # Match do cabeçalho "### <label>" permitindo espaços antes/depois
             awk -v header="$1" '
               BEGIN{ pat="^[[:space:]]*### " header "[[:space:]]*$" }
               $0 ~ pat {flag=1; next}
-              /^[[:space:]]*### [^#]/ && flag {flag=0}  # próximo H3 encerra a seção
+              /^[[:space:]]*### [^#]/ && flag {flag=0}
               flag {print}
             ' <<< "$BODY" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//'
           }
 
           # 2) extrair_nn(): primeira linha não-vazia da seção
-          extrair_nn() {
-            extrair "$1" | awk 'NF{print; exit}'
-          }
+          extrair_nn() { extrair "$1" | awk '\''NF{print; exit}'\''; }
 
-          # 3) extrair_bold(): conserta a regex e aceita indentação
+          # 3) extrair_bold(): aceita título em negrito (**Label**)
           extrair_bold() {
             awk -v lbl="$1" '
-              BEGIN{
-                # ** Rótulo **  (com espaços opcionais e indentação)
-                pat="^[[:space:]]*\\*\\*[[:space:]]*" lbl "[[:space:]]*\\*\\*[[:space:]]*$"
-              }
+              BEGIN{ pat="^[[:space:]]*\\*\\*[[:space:]]*" lbl "[[:space:]]*\\*\\*[[:space:]]*$" }
               $0 ~ pat {
-                # retorna a 1ª linha não-vazia após o título em negrito
-                while (getline) {
-                  if ($0 !~ /^[[:space:]]*$/) { print; exit }
-                }
+                while (getline) { if ($0 !~ /^[[:space:]]*$/) { print; exit } }
               }
             ' <<< "$BODY" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//'
           }
 
-          # 4) Coleta do DESTINO com fallbacks
+          # 4) Coleta dos campos
+          DESC="$(extrair "Descrição do Bug")"
+          LOC="$(extrair "Localização")"
+          PASSOS="$(extrair "Passos para Reprodução")"
+          EVID="$(extrair "Evidências")"
+          RES="$(extrair "Resultado Esperado")"
+
+          # 5) Coleta do DESTINO com fallbacks
           DESTINO="$(extrair_nn "Repositório de destino")"
           [ -z "$DESTINO" ] && DESTINO="$(extrair_nn "Destino")"
           [ -z "$DESTINO" ] && DESTINO="$(extrair_nn "Target repository")"
           [ -z "$DESTINO" ] && DESTINO="$(extrair_nn "Repositório")"
-
-          # Fallback p/ forma em negrito
           [ -z "$DESTINO" ] && DESTINO="$(extrair_bold "Repositório de destino")"
           [ -z "$DESTINO" ] && DESTINO="$(extrair_bold "Destino")"
           [ -z "$DESTINO" ] && DESTINO="$(extrair_bold "Target repository")"
           [ -z "$DESTINO" ] && DESTINO="$(extrair_bold "Repositório")"
 
-          # Debug (opcional)
           echo "::group::DEBUG parse"
           echo "Destino extraído: '${DESTINO}'"
           echo "::endgroup::"
+
+          # 6) Exporta outputs (suporta múltiplas linhas)
+          {
+            echo "descricao<<EOF"
+            printf "%s\n" "$DESC"
+            echo "EOF"
+            echo "localizacao<<EOF"
+            printf "%s\n" "$LOC"
+            echo "EOF"
+            echo "passos<<EOF"
+            printf "%s\n" "$PASSOS"
+            echo "EOF"
+            echo "evidencias<<EOF"
+            printf "%s\n" "$EVID"
+            echo "EOF"
+            echo "resultado<<EOF"
+            printf "%s\n" "$RES"
+            echo "EOF"
+            echo "destino=$DESTINO"
+          } >> "$GITHUB_OUTPUT"
 
       # 4) Pré-validação determinística
       - name: Pré-validação determinística
@@ -228,7 +243,6 @@ jobs:
             fail "Campo 'Repositório de destino' é obrigatório (formato: owner/repo, URL do GitHub ou apenas repo)."
           else
             CLEAN="$(printf "%s" "$DEST" | tr -d '\r' | sed -E 's#^https?://github\.com/##; s#/$##; s/^[[:space:]]+//; s/[[:space:]]+$//')"
-            # Se for "repo" sem owner, deixamos passar e normalizamos mais tarde
             if ! grep -Eq '^[[:alnum:]_.-]+(/[[:alnum:]_.-]+)?$' <<< "$CLEAN" ; then
               fail "Repositório de destino inválido; use 'owner/repo' ou link do GitHub."
             fi
@@ -334,13 +348,12 @@ jobs:
           echo "aprovado=$APROVADO" >> $GITHUB_OUTPUT
           echo "titulo_ok=$TITULO_CORRIGIDO" >> $GITHUB_OUTPUT
 
-      # 7) Aprovado: cria issue no destino
+      # 7) Aprovado: cria issue no repositório de destino
       - name: Criar issue no repositório de destino (se aprovado)
         if: steps.gemini.outputs.aprovado == 'true'
         id: create_issue
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }} # PAT com acesso ao repo de destino
-          DEST_RAW: ${{ steps.parse.outputs.destino }}
         run: |
           set -euo pipefail
 
@@ -348,7 +361,7 @@ jobs:
           RAW_DEST="${{ steps.parse.outputs.destino }}"
           if [ -z "${RAW_DEST//[[:space:]]/}" ]; then
             echo "Destino vazio — não dá para criar a issue no repo alvo." >&2
-            exit 0 # sai sem erro; o comentário de reprovação já foi feito na pré-validação
+            exit 0
           fi
 
           # 1) Normaliza: aceita URL do GitHub, 'owner/repo' ou só 'repo'
@@ -358,7 +371,6 @@ jobs:
             OWNER="${RAW%%/*}"
             REPO="${RAW#*/}"
           else
-            # só repo: usa o owner do repositório atual do workflow
             OWNER="${GITHUB_REPOSITORY%%/*}"
             REPO="$RAW"
           fi
@@ -377,13 +389,7 @@ jobs:
             exit 1
           }
 
-          # 3) Sanity check de acesso do token ao repo alvo
-          gh api -X GET "repos/$OWNER/$REPO" -q .full_name >/dev/null || {
-            echo "O token não tem acesso a repos/$OWNER/$REPO (ou o repo não existe)." >&2
-            exit 1
-          }
-
-          # 4) Corpo da issue
+          # 3) Corpo da issue
           {
             printf "**Descrição do Bug:**\n%s\n\n" '${{ steps.parse.outputs.descricao }}'
             printf "**Localização:**\n%s\n\n"       '${{ steps.parse.outputs.localizacao }}'
@@ -393,16 +399,20 @@ jobs:
             printf "_Criada automaticamente após aprovação (Gemini 2.5 Flash)._"
           } > body.txt
 
+          # 4) Define o título (Gemini > título original)
+          TITLE="${{ steps.gemini.outputs.titulo_ok }}"
+          [ -z "$TITLE" ] && TITLE="${{ github.event.issue.title }}"
+
           # 5) Cria a issue no destino
           RESP="$(gh api "repos/$OWNER/$REPO/issues" -f title="$TITLE" -f body="$(cat body.txt)")"
           jq -r '.html_url' <<< "$RESP" > created_url.txt
           echo "url=$(cat created_url.txt)" >> "$GITHUB_OUTPUT"
 
-      # 8) Aprovado: comenta e move para Backlog
+      # 8) Aprovado: comentar link e mover item para Backlog
       - name: Comentar link e mover para Backlog (no projeto)
         if: steps.gemini.outputs.aprovado == 'true'
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.GH_PAT }} # usar PAT (github.token pode não ter permissão em org)
           OWNER_REPO: ${{ github.event.repository.full_name }}
           NUM: ${{ github.event.issue.number }}
           PROJECT_ID: ${{ steps.pitem.outputs.project_id }}
