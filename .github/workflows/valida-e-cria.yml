@@ -135,7 +135,9 @@ jobs:
           }
 
           # 2) extrair_nn(): primeira linha não-vazia da seção
-          extrair_nn() { extrair "$1" | awk '\''NF{print; exit}'\''; }
+          extrair_nn() {
+            extrair "$1" | awk 'NF{print; exit}'
+          }
 
           # 3) extrair_bold(): aceita título em negrito (**Label**)
           extrair_bold() {
