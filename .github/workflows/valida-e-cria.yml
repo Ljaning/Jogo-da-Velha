@@ -151,32 +151,25 @@ jobs:
 
           [ -z "$(printf "%s" "$LOC" | tr -d '[:space:]')" ] && fail "Localização obrigatória; informe o caminho/tela (ex.: Tela principal > Tabuleiro)."
 
-          # Conta linhas de passos numerados sem quebrar no pipefail
-          CNT=$(awk '/^[[:space:]]*[0-9]+[.)]/{c++} END{print c+0}' <<< "$PASS")
+          CNT=$(printf "%s\n" "$PASS" | grep -Ec '^[[:space:]]*[0-9]+[.)]')
           [ "$CNT" -lt 2 ] && fail "Passos para Reprodução devem ser numerados (1), 2), ...) e ter no mínimo 2 passos."
 
-          # Evidência presente (sem pipeline)
-          if ! grep -Eiq '!\[[^]]*\]\(|https?://|\.png|\.jpe?g|\.gif|\.mp4|\.mov' <<< "$EVID"; then
+          printf "%s" "$EVID" | grep -Eiq '!\[[^]]*\]\(|https?://|\.png|\.jpe?g|\.gif|\.mp4|\.mov' || \
             fail "Evidências devem conter ao menos 1 URL (print/vídeo) ou arquivo anexado."
-          fi
 
-          # Deteção de segredos (sem pipeline; usa here-string)
-          if grep -Eiq '(AKIA[0-9A-Z]{16}|-----BEGIN (RSA|OPENSSH) PRIVATE KEY-----|password=|secret=|x-api-key|token=|Authorization: Bearer)' \
-             <<< "$DESC"$'\n'"$EVID"$'\n'"$PASS"
-          then
-            echo "escalar=true" >> "$GITHUB_OUTPUT"
+          printf "%s %s %s" "$DESC" "$EVID" "$PASS" | \
+          grep -Eiq '(AKIA[0-9A-Z]{16}|-----BEGIN (RSA|OPENSSH) PRIVATE KEY-----|password=|secret=|x-api-key|token=|Authorization: Bearer)' && {
+            echo "escalar=true" >> $GITHUB_OUTPUT
             fail "Possível dado sensível detectado (chaves/senhas/segredos); remova ou redija."
-          fi
+          }
 
           # Destino obrigatório e válido
           if [ -z "$(printf "%s" "$DEST" | tr -d '[:space:]')" ]; then
             fail "Campo 'Repositório de destino' é obrigatório (formato: owner/repo, URL do GitHub ou apenas repo)."
           else
             CLEAN=$(printf "%s" "$DEST" | tr -d '\r' | sed -E 's#^https?://github\.com/##; s#/$##; s/^[[:space:]]+//; s/[[:space:]]+$//')
-            # Validação do repo sem pipeline
-            if ! grep -Eq '^[[:alnum:]_.-]+(/[[:alnum:]_.-]+)?$' <<< "$CLEAN"; then
+            echo "$CLEAN" | grep -Eq '^[[:alnum:]_.-]+(/[[:alnum:]_.-]+)?$' || \
               fail "Repositório de destino inválido; use 'owner/repo' ou link do GitHub."
-            fi
           fi
 
           if [ -f precheck_errors.txt ]; then echo "found_errors=true" >> $GITHUB_OUTPUT; else echo "found_errors=false" >> $GITHUB_OUTPUT; fi
