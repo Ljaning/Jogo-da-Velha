@@ -141,11 +141,13 @@ jobs:
           RES="${{ steps.parse.outputs.resultado }}"
           DEST="${{ steps.parse.outputs.destino }}"
 
+          # Título da issue (limite mecânico na pré para conter custo)
+          TITLE=$(jq -r '.issue.title' "$GITHUB_EVENT_PATH")
+          WORDS=$(printf "%s" "$TITLE" | wc -w)
+          [ "$WORDS" -gt 10 ] && fail "Título deve ter no máximo 10 palavras."
+
           TOTLEN=$(printf "%s%s%s%s%s" "$DESC" "$LOC" "$PASS" "$EVID" "$RES" | wc -c)
           [ "$TOTLEN" -gt 800 ] && fail "Texto total ultrapassa 800 caracteres (atual: ${TOTLEN})."
-
-          SENT=$(printf "%s" "$DESC" | tr '\n' ' ' | grep -oE '[.!?]' | wc -l || true)
-          [ "$SENT" -gt 2 ] && fail "Descrição do Bug deve ter no máximo 2 frases com contexto (como/quando)."
 
           [ -z "$(printf "%s" "$LOC" | tr -d '[:space:]')" ] && fail "Localização obrigatória; informe o caminho/tela (ex.: Tela principal > Tabuleiro)."
 
@@ -154,9 +156,6 @@ jobs:
 
           printf "%s" "$EVID" | grep -Eiq '!\[[^]]*\]\(|https?://|\.png|\.jpe?g|\.gif|\.mp4|\.mov' || \
             fail "Evidências devem conter ao menos 1 URL (print/vídeo) ou arquivo anexado."
-
-          printf "%s" "$RES" | grep -Eiq 'funcion(a|e) corretamente|sem erro(s)?|deveria funcionar|ok' && \
-            fail "Resultado esperado está genérico; descreva comportamento específico e verificável."
 
           printf "%s %s %s" "$DESC" "$EVID" "$PASS" | \
           grep -Eiq '(AKIA[0-9A-Z]{16}|-----BEGIN (RSA|OPENSSH) PRIVATE KEY-----|password=|secret=|x-api-key|token=|Authorization: Bearer)' && {
@@ -193,11 +192,10 @@ jobs:
             while IFS= read -r m; do
               case "$m" in
                 *"ultrapassa 800"*) echo "- Reduza as respostas para no máximo 800 caracteres." ;;
-                *"no máximo 2 frases"*) echo "- Reescreva a descrição em até 2 frases com contexto (como/quando ocorreu)." ;;
+                *"Título deve ter no máximo 10 palavras"*) echo "- Reduza o título para até 10 palavras mantendo o contexto." ;;
                 *"Localização obrigatória"*) echo "- Informe o caminho/tela. Ex.: Tela principal > Tabuleiro." ;;
                 *"Passos para Reprodução"*) echo "- Liste pelo menos 2 passos numerados (1), 2), ...)." ;;
                 *"Evidências devem"*) echo "- Inclua ao menos 1 link de print/vídeo ou anexe um arquivo." ;;
-                *"Resultado esperado está genérico"*) echo "- Descreva o comportamento correto verificável (ex.: limpar células e resetar o contador)." ;;
                 *"dado sensível"*) echo "- Remova chaves/senhas/segredos e substitua por <redigido>." ;;
                 *) echo "- $m" ;;
               esac
@@ -216,13 +214,12 @@ jobs:
 
           SYS='Você é um revisor de qualidade de bugs. Linguagem: Português (Brasil). Seja objetivo e claro.
           Aprove SOMENTE se TODAS as regras forem atendidas:
-          - Título: até 10 palavras (conciso, preserva contexto).
           - Descrição: até 2 frases com contexto (como e quando).
-          - Localização: tem ao menos 1 nível.
-          - Passos: numerados, pelo menos 2 passos.
-          - Evidências: contém ao menos 1 URL ou anexo.
+          - Localização: com nível útil e coerente (ex.: Tela principal > Tabuleiro).
+          - Passos: claros, reproduzíveis e em ordem lógica (julgue suficiência e clareza).
+          - Evidências: pertinentes e corroboram a descrição.
           - Resultado: específico e verificável (não genérico).
-          - Sem PII/segredos; se houver -> escalar=true e reprove.
+          - Se suspeitar de PII/segredos que não foram pegos pelo filtro, marque "escalar=true" e reprove.
           Não estimar esforço, nem priorizar, nem sugerir solução técnica.
           Responda SOMENTE no schema JSON. Campos "motivos" e "sugestoes" em bullets curtos.
           Se possível, proponha "titulo_corrigido" (<= 10 palavras).'
