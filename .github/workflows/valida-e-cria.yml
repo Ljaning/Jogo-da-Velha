@@ -270,7 +270,7 @@ jobs:
             echo
             echo "**Sugestões:**"; cat sugestoes.txt
             echo
-            echo "Estou na versão Alfa, posso errar mas sou melhor que o GPT!"
+            echo "**🤖 Oi, estou na versão ALFA, posso errar, mas sou melhor que o GPT!**"
           } > body.txt
 
           gh api repos/$OWNER_REPO/issues/$NUM/comments -f body="$(cat body.txt)"
