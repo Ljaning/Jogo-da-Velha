@@ -210,7 +210,6 @@ jobs:
             printf "**Passos para Reprodução:**\n%s\n\n" '${{ steps.parse.outputs.passos }}'
             printf "**Evidências:**\n%s\n\n"        '${{ steps.parse.outputs.evidencias }}'
             printf "**Resultado Esperado:**\n%s\n\n" '${{ steps.parse.outputs.resultado }}'
-            printf "_Criada automaticamente após aprovação (Gemini 2.5 Flash)._"
           } > body.txt
 
           TITLE="${{ steps.gemini.outputs.titulo_ok }}"
