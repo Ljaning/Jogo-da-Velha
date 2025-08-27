@@ -236,9 +236,9 @@ jobs:
           url=$(cat created_url.txt)
 
           {
-            echo "✅ Aprovada. Issue pronta para backlog"
+            echo "✅ Issue foi aprovada pela validação automática."
             echo
-            echo "🤖 Oi, estou na versão ALFA, posso errar, mas sou melhor que o GPT!**"
+            echo "**🤖 Oi, estou na versão ALFA, posso errar, mas sou melhor que o GPT!**"
           } > comment.txt
           gh api repos/$OWNER_REPO/issues/$NUM/comments -f body="$(cat comment.txt)"
 
@@ -263,7 +263,7 @@ jobs:
           jq -r '.sugestoes[]' gemini.json 2>/dev/null | sed 's/^/- /' > sugestoes.txt || echo "- Ajuste os campos obrigatórios conforme os motivos." > sugestoes.txt
 
           {
-            echo "A solicitação não foi aprovada pela validação automática."
+            echo "❌ Issue NÃO foi aprovada pela validação automática."
             echo
             echo "**Motivos:**"; cat motivos.txt
             echo
