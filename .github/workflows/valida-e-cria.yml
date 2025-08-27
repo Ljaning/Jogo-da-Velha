@@ -146,17 +146,16 @@ jobs:
           WORDS=$(printf "%s" "$TITLE" | wc -w)
           [ "$WORDS" -gt 10 ] && fail "Título deve ter no máximo 10 palavras."
 
-          TOTLEN=$(printf "%s%s%s%s%s" "$DESC" "$LOC" "$PASS" "$EVID" "$RES" | wc -c)
-          [ "$TOTLEN" -gt 800 ] && fail "Texto total ultrapassa 800 caracteres (atual: ${TOTLEN})."
+          # ❗ Agora o limite ignora 'Evidências'
+          TOTLEN=$(printf "%s%s%s%s" "$DESC" "$LOC" "$PASS" "$RES" | wc -c)
+          [ "$TOTLEN" -gt 800 ] && fail "Texto total (sem Evidências) ultrapassa 800 caracteres (atual: ${TOTLEN})."
 
           [ -z "$(printf "%s" "$LOC" | tr -d '[:space:]')" ] && fail "Localização obrigatória; informe o caminho/tela (ex.: Tela principal > Tabuleiro)."
 
           CNT=$(printf "%s\n" "$PASS" | grep -Ec '^[[:space:]]*[0-9]+[.)]')
           [ "$CNT" -lt 2 ] && fail "Passos para Reprodução devem ser numerados (1), 2), ...) e ter no mínimo 2 passos."
 
-          printf "%s" "$EVID" | grep -Eiq '!\[[^]]*\]\(|https?://|\.png|\.jpe?g|\.gif|\.mp4|\.mov' || \
-            fail "Evidências devem conter ao menos 1 URL (print/vídeo) ou arquivo anexado."
-
+          # 🔒 Mantém checagem de segredos (inclui Evidências, mas não é critério de presença/qualidade de evidência)
           printf "%s %s %s" "$DESC" "$EVID" "$PASS" | \
           grep -Eiq '(AKIA[0-9A-Z]{16}|-----BEGIN (RSA|OPENSSH) PRIVATE KEY-----|password=|secret=|x-api-key|token=|Authorization: Bearer)' && {
             echo "escalar=true" >> $GITHUB_OUTPUT
@@ -191,11 +190,10 @@ jobs:
             echo "**Sugestões:**"
             while IFS= read -r m; do
               case "$m" in
-                *"ultrapassa 800"*) echo "- Reduza as respostas para no máximo 800 caracteres." ;;
+                *"ultrapassa 800"*) echo "- Reduza as respostas (exceto Evidências) para no máximo 800 caracteres." ;;
                 *"Título deve ter no máximo 10 palavras"*) echo "- Reduza o título para até 10 palavras mantendo o contexto." ;;
                 *"Localização obrigatória"*) echo "- Informe o caminho/tela. Ex.: Tela principal > Tabuleiro." ;;
                 *"Passos para Reprodução"*) echo "- Liste pelo menos 2 passos numerados (1), 2), ...)." ;;
-                *"Evidências devem"*) echo "- Inclua ao menos 1 link de print/vídeo ou anexe um arquivo." ;;
                 *"dado sensível"*) echo "- Remova chaves/senhas/segredos e substitua por <redigido>." ;;
                 *) echo "- $m" ;;
               esac
@@ -217,7 +215,6 @@ jobs:
           - Descrição: até 2 frases, com contexto de como e quando ocorreu. Sem termos vagos (ex.: "às vezes", "parece", "coisa", "travou do nada").
           - Localização: nível útil e coerente (ex.: Tela principal > Tabuleiro > Cartão). Reprove se estiver genérico (ex.: "app", "mobile", "sistema").
           - Passos: numerados, claros, reproduzíveis e em ordem lógica. Devem permitir reproduzir sem adivinhações. Reprove se faltar pré-condição essencial ou se os passos forem ambíguos.
-          - Evidências: pertinentes e coerentes com os passos/resultado (print, vídeo, logs, IDs). Reprove se não corroborarem a descrição.
           - Resultado: específico e verificável (não genérico).
           - Repetição: reprove se houver informação muito repetida entre seções (ex.: mesma frase em Descrição e Resultado) sem valor adicional. Sinalize o que está redundante.
           - Ambiguidade: reprove se houver ambiguidades que impeçam a reprodução (ex.: não indicar ambiente, versão, usuário, item/ID, caminho exato, condição "às vezes"). Liste as dúvidas objetivas.
