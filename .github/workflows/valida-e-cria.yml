@@ -236,10 +236,9 @@ jobs:
           url=$(cat created_url.txt)
 
           {
-            echo "✅ Aprovada. Criada no destino:"
-            echo "$url"
+            echo "✅ Aprovada. Issue pronta para backlog"
             echo
-            echo "Movendo o item do projeto para **Backlog**."
+            echo "🤖 Oi, estou na versão ALFA, posso errar, mas sou melhor que o GPT!**"
           } > comment.txt
           gh api repos/$OWNER_REPO/issues/$NUM/comments -f body="$(cat comment.txt)"
 
