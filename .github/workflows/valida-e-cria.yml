@@ -147,6 +147,9 @@ jobs:
           - Ambiguidade: reprove se houver ambiguidades que impeçam a reprodução (ex.: não indicar ambiente, versão, usuário, item/ID, caminho exato, condição "às vezes"). Liste as dúvidas objetivas.
           - Português (PT-BR): reprove se houver erros graves que prejudiquem a compreensão (concordância, termos truncados, ortografia que mude o sentido). Se forem leves e não afetarem entendimento, pode aprovar, mas aponte correções em "sugestoes".
           Não estimar esforço, nem priorizar, nem sugerir solução técnica.
+          Usuário não precisa informar o ambiente e a versão do aplicativo e/ou sistema(ex.: desenvolvimento, homologação, produção e versão 1.0.0).
+          Não precisa olhar para informalidade da linguagem.
+          Não precisa de pré-condições essenciais.
           Responda SOMENTE no schema JSON. Campos "motivos" e "sugestoes" em bullets curtos.
           Se possível, proponha "titulo_corrigido" (<= 10 palavras).'
 
@@ -266,6 +269,8 @@ jobs:
             echo "**Motivos:**"; cat motivos.txt
             echo
             echo "**Sugestões:**"; cat sugestoes.txt
+            echo
+            echo "Estou na versão Alfa, posso errar mas sou melhor que o GPT!"
           } > body.txt
 
           gh api repos/$OWNER_REPO/issues/$NUM/comments -f body="$(cat body.txt)"
