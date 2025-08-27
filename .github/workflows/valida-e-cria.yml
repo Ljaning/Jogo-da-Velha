@@ -151,32 +151,25 @@ jobs:
 
           [ -z "$(printf "%s" "$LOC" | tr -d '[:space:]')" ] && fail "Localização obrigatória; informe o caminho/tela (ex.: Tela principal > Tabuleiro)."
 
-          # Conta linhas de passos numerados sem quebrar no pipefail
-          CNT=$(awk '/^[[:space:]]*[0-9]+[.)]/{c++} END{print c+0}' <<< "$PASS")
+          CNT=$(printf "%s\n" "$PASS" | grep -Ec '^[[:space:]]*[0-9]+[.)]')
           [ "$CNT" -lt 2 ] && fail "Passos para Reprodução devem ser numerados (1), 2), ...) e ter no mínimo 2 passos."
 
-          # Evidência presente (sem pipeline)
-          if ! grep -Eiq '!\[[^]]*\]\(|https?://|\.png|\.jpe?g|\.gif|\.mp4|\.mov' <<< "$EVID"; then
+          printf "%s" "$EVID" | grep -Eiq '!\[[^]]*\]\(|https?://|\.png|\.jpe?g|\.gif|\.mp4|\.mov' || \
             fail "Evidências devem conter ao menos 1 URL (print/vídeo) ou arquivo anexado."
-          fi
 
-          # Deteção de segredos (sem pipeline; usa here-string)
-          if grep -Eiq '(AKIA[0-9A-Z]{16}|-----BEGIN (RSA|OPENSSH) PRIVATE KEY-----|password=|secret=|x-api-key|token=|Authorization: Bearer)' \
-             <<< "$DESC"$'\n'"$EVID"$'\n'"$PASS"
-          then
-            echo "escalar=true" >> "$GITHUB_OUTPUT"
+          printf "%s %s %s" "$DESC" "$EVID" "$PASS" | \
+          grep -Eiq '(AKIA[0-9A-Z]{16}|-----BEGIN (RSA|OPENSSH) PRIVATE KEY-----|password=|secret=|x-api-key|token=|Authorization: Bearer)' && {
+            echo "escalar=true" >> $GITHUB_OUTPUT
             fail "Possível dado sensível detectado (chaves/senhas/segredos); remova ou redija."
-          fi
+          }
 
           # Destino obrigatório e válido
           if [ -z "$(printf "%s" "$DEST" | tr -d '[:space:]')" ]; then
             fail "Campo 'Repositório de destino' é obrigatório (formato: owner/repo, URL do GitHub ou apenas repo)."
           else
             CLEAN=$(printf "%s" "$DEST" | tr -d '\r' | sed -E 's#^https?://github\.com/##; s#/$##; s/^[[:space:]]+//; s/[[:space:]]+$//')
-            # Validação do repo sem pipeline
-            if ! grep -Eq '^[[:alnum:]_.-]+(/[[:alnum:]_.-]+)?$' <<< "$CLEAN"; then
+            echo "$CLEAN" | grep -Eq '^[[:alnum:]_.-]+(/[[:alnum:]_.-]+)?$' || \
               fail "Repositório de destino inválido; use 'owner/repo' ou link do GitHub."
-            fi
           fi
 
           if [ -f precheck_errors.txt ]; then echo "found_errors=true" >> $GITHUB_OUTPUT; else echo "found_errors=false" >> $GITHUB_OUTPUT; fi
@@ -221,20 +214,15 @@ jobs:
 
           SYS='Você é um revisor de qualidade de bugs. Linguagem: Português (Brasil). Seja objetivo e claro.
           Aprove SOMENTE se TODAS as regras forem atendidas:
-          1) Descrição: até 2 frases, com contexto de como e quando ocorreu. Sem termos vagos (ex.: "às vezes", "parece", "coisa", "travou do nada").
-          2) Localização: nível útil e coerente (ex.: Tela principal > Tabuleiro > Cartão). Reprove se estiver genérico (ex.: "app", "mobile", "sistema").
-          3) Passos: numerados, claros, reproduzíveis e em ordem lógica. Devem permitir reproduzir sem adivinhações. Reprove se faltar pré-condição essencial ou se os passos forem ambíguos.
-          4) Evidências: pertinentes e coerentes com os passos/resultado (print, vídeo, logs, IDs). Reprove se não corroborarem a descrição.
-          5) Resultado: específico e verificável (não genérico).
-          6) Repetição: reprove se houver informação muito repetida entre seções (ex.: mesma frase em Descrição e Resultado) sem valor adicional. Sinalize o que está redundante.
-          7) Ambiguidade: reprove se houver ambiguidades que impeçam a reprodução (ex.: não indicar ambiente, versão, usuário, item/ID, caminho exato, condição "às vezes"). Liste as dúvidas objetivas.
-          8) Português (PT-BR): reprove se houver erros graves que prejudiquem a compreensão (concordância, termos truncados, ortografia que mude o sentido). Se forem leves e não afetarem entendimento, pode aprovar, mas aponte correções em "sugestoes".
-          Instruções de resposta:
-          - Não estimar esforço/prioridade, nem sugerir solução técnica.
-          - Responder SOMENTE no schema JSON fornecido.
-          - Escreva "motivos" e "sugestoes" como bullets curtos, começando com etiquetas quando aplicável (ex.: "[repetição] ...", "[ambiguidade] ...", "[pt-br] ...", "[evidência] ...").
-          - "score" é diagnóstico (0–100), não substitui as regras acima. Sugerido: Descrição(15), Localização(15), Passos(30), Evidências(15), Resultado(10), Repetição(7), Ambiguidade(5), PT-BR(3).
-          - Se "escalar=true", então "aprovado=false".'`
+          - Descrição: até 2 frases com contexto (como e quando).
+          - Localização: com nível útil e coerente (ex.: Tela principal > Tabuleiro).
+          - Passos: claros, reproduzíveis e em ordem lógica (julgue suficiência e clareza).
+          - Evidências: pertinentes e corroboram a descrição.
+          - Resultado: específico e verificável (não genérico).
+          - Se suspeitar de PII/segredos que não foram pegos pelo filtro, marque "escalar=true" e reprove.
+          Não estimar esforço, nem priorizar, nem sugerir solução técnica.
+          Responda SOMENTE no schema JSON. Campos "motivos" e "sugestoes" em bullets curtos.
+          Se possível, proponha "titulo_corrigido" (<= 10 palavras).'
 
           USER=$'Descrição do Bug:\n'"${{ steps.parse.outputs.descricao }}"$'\n\nLocalização:\n'"${{ steps.parse.outputs.localizacao }}"$'\n\nPassos para Reprodução:\n'"${{ steps.parse.outputs.passos }}"$'\n\nEvidências:\n'"${{ steps.parse.outputs.evidencias }}"$'\n\nResultado Esperado:\n'"${{ steps.parse.outputs.resultado }}"
 
