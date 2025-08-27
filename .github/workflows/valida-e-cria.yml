@@ -1,3 +1,4 @@
+# .github/workflows/validar-solicitacao-com-gemini.yml
 name: Validar solicitação com Gemini 2.5 Flash e criar issue
 
 on:
@@ -127,86 +128,9 @@ jobs:
             echo "destino=$DEST"
           } >> "$GITHUB_OUTPUT"
 
-      # 3) Pré-validação determinística
-      - name: Pré-validação
-        id: precheck
-        run: |
-          set -Eeuo pipefail
-          fail(){ echo "$1" >> precheck_errors.txt; }
-
-          DESC="${{ steps.parse.outputs.descricao }}"
-          LOC="${{ steps.parse.outputs.localizacao }}"
-          PASS="${{ steps.parse.outputs.passos }}"
-          EVID="${{ steps.parse.outputs.evidencias }}"
-          RES="${{ steps.parse.outputs.resultado }}"
-          DEST="${{ steps.parse.outputs.destino }}"
-
-          # Título da issue (limite mecânico na pré para conter custo)
-          TITLE=$(jq -r '.issue.title' "$GITHUB_EVENT_PATH")
-          WORDS=$(printf "%s" "$TITLE" | wc -w)
-          [ "$WORDS" -gt 10 ] && fail "Título deve ter no máximo 10 palavras."
-
-          TOTLEN=$(printf "%s%s%s%s%s" "$DESC" "$LOC" "$PASS" "$EVID" "$RES" | wc -c)
-          [ "$TOTLEN" -gt 800 ] && fail "Texto total ultrapassa 800 caracteres (atual: ${TOTLEN})."
-
-          [ -z "$(printf "%s" "$LOC" | tr -d '[:space:]')" ] && fail "Localização obrigatória; informe o caminho/tela (ex.: Tela principal > Tabuleiro)."
-
-          CNT=$(printf "%s\n" "$PASS" | grep -Ec '^[[:space:]]*[0-9]+[.)]')
-          [ "$CNT" -lt 2 ] && fail "Passos para Reprodução devem ser numerados (1), 2), ...) e ter no mínimo 2 passos."
-
-          printf "%s" "$EVID" | grep -Eiq '!\[[^]]*\]\(|https?://|\.png|\.jpe?g|\.gif|\.mp4|\.mov' || \
-            fail "Evidências devem conter ao menos 1 URL (print/vídeo) ou arquivo anexado."
-
-          printf "%s %s %s" "$DESC" "$EVID" "$PASS" | \
-          grep -Eiq '(AKIA[0-9A-Z]{16}|-----BEGIN (RSA|OPENSSH) PRIVATE KEY-----|password=|secret=|x-api-key|token=|Authorization: Bearer)' && {
-            echo "escalar=true" >> $GITHUB_OUTPUT
-            fail "Possível dado sensível detectado (chaves/senhas/segredos); remova ou redija."
-          }
-
-          # Destino obrigatório e válido
-          if [ -z "$(printf "%s" "$DEST" | tr -d '[:space:]')" ]; then
-            fail "Campo 'Repositório de destino' é obrigatório (formato: owner/repo, URL do GitHub ou apenas repo)."
-          else
-            CLEAN=$(printf "%s" "$DEST" | tr -d '\r' | sed -E 's#^https?://github\.com/##; s#/$##; s/^[[:space:]]+//; s/[[:space:]]+$//')
-            echo "$CLEAN" | grep -Eq '^[[:alnum:]_.-]+(/[[:alnum:]_.-]+)?$' || \
-              fail "Repositório de destino inválido; use 'owner/repo' ou link do GitHub."
-          fi
-
-          if [ -f precheck_errors.txt ]; then echo "found_errors=true" >> $GITHUB_OUTPUT; else echo "found_errors=false" >> $GITHUB_OUTPUT; fi
-
-      # 4) Comentar reprovação por pré-validação (não fecha)
-      - name: Comentar por pré-validação (não fecha)
-        if: steps.precheck.outputs.found_errors == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          OWNER_REPO: ${{ github.event.repository.full_name }}
-          NUM: ${{ github.event.issue.number }}
-        run: |
-          {
-            echo "A solicitação não foi aprovada pela validação automática."
-            echo
-            echo "**Motivos:**"
-            sed 's/^/- /' precheck_errors.txt
-            echo
-            echo "**Sugestões:**"
-            while IFS= read -r m; do
-              case "$m" in
-                *"ultrapassa 800"*) echo "- Reduza as respostas para no máximo 800 caracteres." ;;
-                *"Título deve ter no máximo 10 palavras"*) echo "- Reduza o título para até 10 palavras mantendo o contexto." ;;
-                *"Localização obrigatória"*) echo "- Informe o caminho/tela. Ex.: Tela principal > Tabuleiro." ;;
-                *"Passos para Reprodução"*) echo "- Liste pelo menos 2 passos numerados (1), 2), ...)." ;;
-                *"Evidências devem"*) echo "- Inclua ao menos 1 link de print/vídeo ou anexe um arquivo." ;;
-                *"dado sensível"*) echo "- Remova chaves/senhas/segredos e substitua por <redigido>." ;;
-                *) echo "- $m" ;;
-              esac
-            done < precheck_errors.txt
-          } > body.txt
-          gh api repos/$OWNER_REPO/issues/$NUM/comments -f body="$(cat body.txt)"
-
-      # 5) Gemini 2.5 Flash (só se passou na pré)
+      # 3) Gemini 2.5 Flash (sempre roda; pré-validação removida)
       - name: Validar com Gemini 2.5 Flash (JSON estrito)
         id: gemini
-        if: steps.precheck.outputs.found_errors == 'false'
         env:
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
         run: |
@@ -244,7 +168,7 @@ jobs:
 
           HTTP=$(curl -sS -w "%{http_code}" -o /tmp/resp.json \
             -X POST "https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent" \
-            -H "Content-Type: application/json" -H "x-goog-api-key: '"$GOOGLE_API_KEY"'" --data-binary "$PAYLOAD")
+            -H "Content-Type: application/json" -H "x-goog-api-key: ${GOOGLE_API_KEY}" --data-binary "$PAYLOAD")
           echo "HTTP status: $HTTP"
           [ "$HTTP" -ge 200 ] && [ "$HTTP" -lt 300 ] || { echo "Erro:"; cat /tmp/resp.json; exit 1; }
 
@@ -259,7 +183,7 @@ jobs:
           echo "aprovado=$APROVADO"   >> $GITHUB_OUTPUT
           echo "titulo_ok=$TITULO_CORRIGIDO" >> $GITHUB_OUTPUT
 
-      # 6) Aprovado: cria issue no repositório de destino
+      # 4) Aprovado: cria issue no repositório de destino
       - name: Criar issue no repositório de destino (se aprovado)
         if: steps.gemini.outputs.aprovado == 'true'
         id: create_issue
@@ -293,7 +217,7 @@ jobs:
           jq -r '.html_url' <<< "$RESP" > created_url.txt
           echo "url=$(cat created_url.txt)" >> "$GITHUB_OUTPUT"
 
-      # 7) Aprovada: comentar link e mover para Backlog
+      # 5) Aprovada: comentar link e mover para Backlog
       - name: Comentar link e mover para Backlog
         if: steps.gemini.outputs.aprovado == 'true'
         env:
@@ -325,9 +249,9 @@ jobs:
             }' \
             -f project="$PROJECT_ID" -f item="$ITEM_ID" -f field="$STATUS_FIELD_ID" -f opt="$BACKLOG_OPT" >/dev/null
 
-      # 8) Reprovado: comentar (não fecha)
+      # 6) Reprovado: comentar (não fecha)
       - name: Comentar (reprovado) — não fecha
-        if: steps.precheck.outputs.found_errors == 'false' && steps.gemini.outputs.aprovado != 'true'
+        if: steps.gemini.outputs.aprovado != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           OWNER_REPO: ${{ github.event.repository.full_name }}

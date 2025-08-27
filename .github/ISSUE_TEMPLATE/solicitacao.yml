@@ -1,3 +1,4 @@
+# .github/ISSUE_TEMPLATE/solicitacao-de-criacao-de-issue.yml
 name: Solicitação de criação de issue
 description: Forneça detalhes para análise automática
 title: "​"
@@ -58,6 +59,7 @@ body:
         O item deve ser adicionado ao carrinho sem erros e exibir a quantidade atualizada.
     validations:
       required: true
+
   - type: dropdown
     id: destino
     attributes:
